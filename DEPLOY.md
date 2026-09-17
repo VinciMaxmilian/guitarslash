@@ -22,7 +22,7 @@ Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
 
 ```bash
 git status                  # trabalho commitado
-python main.py test         # 100 testes do backend
+python main.py test         # 107 testes do backend
 cd frontend && npm test     # 91 testes do frontend
 cd frontend && npm run build   # o build tem que passar localmente
 ```
@@ -39,7 +39,7 @@ motivo: o script roda `tsc --noEmit` antes do Vite.
 | Arquivo | Para quê |
 |---|---|
 | `api/index.py` | entrypoint; exporta o app ASGI que a Vercel detecta |
-| `vercel.json` | `maxDuration`, memória e roteamento de tudo para a function |
+| `vercel.json` | roteia todos os caminhos para a function (ver seção 1.6) |
 | `requirements.txt` | dependências de runtime |
 | `.python-version` | fixa o Python em 3.12 |
 | `.vercelignore` | **impede que `songs/` (143 MB) entre no bundle** |
@@ -157,9 +157,12 @@ Leitura do resultado:
 - `{"detail":"rota nao encontrada","path":"/api/index",...}` → problema de
   roteamento, não da aplicação. Leia o quadro abaixo.
 
-### 1.6 A armadilha do `rewrites` (por que tudo dava 404)
+### 1.6 Roteamento: a parte que dá errado
 
-Esta configuração **parece** certa e não funciona:
+O backend é **uma** function ASGI que precisa receber **todos** os caminhos. A
+Vercel tem três formas de fazer isso e elas falham de maneiras diferentes.
+
+#### ❌ `rewrites` — responde 404 em tudo
 
 ```json
 { "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }] }
@@ -167,31 +170,81 @@ Esta configuração **parece** certa e não funciona:
 
 `destination` **substitui** o caminho da requisição. A function recebe sempre
 `/api/index`, então o FastAPI responde 404 para tudo — inclusive `/docs` e
-`/openapi.json`. O sintoma engana: `{"detail":"Not Found"}` vem do FastAPI, o
-que faz parecer erro de rota na aplicação, quando a aplicação está correta e
-nunca viu o caminho original.
+`/openapi.json`. O sintoma engana: o `{"detail":"Not Found"}` vem do FastAPI,
+o que parece erro de rota da aplicação, quando ela está correta e simplesmente
+nunca viu o caminho pedido.
 
-O que funciona é `routes` com `dest` apontando para o **arquivo-fonte**, que
-preserva o caminho original:
+#### ❌ `routes` + `functions` — `FUNCTION_INVOCATION_FAILED`
 
 ```json
 {
-  "functions": { "api/index.py": { "maxDuration": 30, "memory": 1024 } },
+  "functions": { "api/index.py": { "maxDuration": 30 } },
   "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
 }
 ```
 
-É o que está no `vercel.json` do repositório. Duas observações:
+`routes` é do pipeline legado e `functions` é do moderno. Juntos, a function
+não é registrada onde o `routes` procura e a invocação falha antes de o Python
+rodar. Erro 500 de plataforma, sem log da aplicação.
 
-- `routes` não pode conviver com `rewrites`, `redirects`, `headers`,
-  `cleanUrls` nem `trailingSlash` no mesmo arquivo. Se precisar de algum
-  deles, terá que escolher.
-- Se a Vercel reclamar de `functions` junto com `routes`, troque por
-  `"builds": [{ "src": "api/index.py", "use": "@vercel/python" }]` e mantenha
-  o mesmo bloco `routes` — aí o `maxDuration` volta ao default da plataforma.
+#### ✅ `builds` + `routes` — é o que está no repositório
 
-Para não cair nisso de novo, o 404 da aplicação agora informa o caminho que
-recebeu, e avisa quando esse caminho é o destino do rewrite.
+```json
+{
+  "builds": [{ "src": "api/index.py", "use": "@vercel/python" }],
+  "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
+}
+```
+
+Pipeline legado inteiro, coerente consigo mesmo. Com `dest` apontando para o
+**arquivo-fonte**, o caminho original chega intacto na function.
+
+Consequências de usar `builds`:
+
+- não dá para usar `functions`, então `maxDuration` e `memory` ficam no
+  default da plataforma. Com `GUITARSLASH_STORAGE=remote` a function só busca
+  JSON pronto, então o default basta;
+- `routes` não convive com `rewrites`, `redirects`, `headers`, `cleanUrls` nem
+  `trailingSlash` no mesmo arquivo;
+- o `.vercelignore` continua valendo — `songs/` segue fora do bundle.
+
+#### 🔧 Plano B, se o roteamento ainda falhar
+
+Se a Vercel mudar de comportamento outra vez, existe uma saída que não depende
+de a plataforma preservar o caminho: mandá-lo na **query string**.
+
+```json
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index?__p=:path*" }
+  ]
+}
+```
+
+`api/index.py` já vem com o wrapper `restore_original_path`, que lê `__p`,
+devolve o caminho ao request e remove o parâmetro antes de entregar ao
+FastAPI. Sem `__p` na URL ele não faz nada, então pode ficar ligado sempre —
+é só trocar o `vercel.json`, sem tocar em código.
+
+Essa rota está coberta por testes (`backend/tests/test_vercel_entrypoint.py`),
+incluindo caminho com vários segmentos (`/api/songs/rescan`) e preservação dos
+outros parâmetros de query.
+
+#### Diagnóstico em uma requisição
+
+```bash
+curl -s https://guitarslash.vercel.app/api/health
+```
+
+| Resposta | Significado |
+|---|---|
+| `{"status":"ok",...}` | roteamento certo |
+| `{"detail":"rota nao encontrada","path":"/api/index","hint":...}` | caminho engolido pelo rewrite |
+| `FUNCTION_INVOCATION_FAILED` | erro de plataforma: a function não rodou (config inválida ou erro de import) |
+| `{"detail":"Not Found"}` sem `path` | deploy antigo, anterior a este diagnóstico |
+
+O 404 da aplicação informa o caminho que recebeu justamente para separar
+"a aplicação não tem essa rota" de "a aplicação recebeu outro caminho".
 
 ---
 
@@ -360,8 +413,10 @@ Variáveis locais: copie `.env.example` para `.env` (backend) e
 | `/api/health` diz `"storage":"local"` | variável não chegou ao ambiente Production | conferir em Settings e redeployar |
 | `"count":0` e `errors` preenchido | `index.json` inacessível | abrir `<BASE_URL>/index.json` no navegador |
 | Deploy da Vercel estoura o tamanho | `.vercelignore` ausente ou alterado | confirmar que `songs/` está listada |
-| **Tudo na Vercel dá 404, inclusive `/docs`** | `rewrites` engoliu o caminho | usar `routes` + `dest: api/index.py` (seção 1.6) |
+| **Tudo na Vercel dá 404, inclusive `/docs`** | `rewrites` engoliu o caminho | `builds` + `routes` (seção 1.6) |
 | 404 com `"path":"/api/index"` | idem | idem |
+| `FUNCTION_INVOCATION_FAILED` | `routes` misturado com `functions`, ou erro de import | seção 1.6; conferir os logs em Vercel → Deployments → Functions |
+| Erro de CORS com status 500 | o CORS é **sintoma**: exceção não tratada não passa pelo middleware | corrigir o 500; o CORS volta sozinho |
 | Áudio não dá seek | bucket sem Range requests | habilitar no storage |
 | Vídeo não carrega | bucket sem CORS | liberar o domínio do frontend |
 | MULTIPLAYER desabilitado no site | **correto** | usar o modo host |
