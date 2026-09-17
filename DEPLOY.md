@@ -22,7 +22,7 @@ Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
 
 ```bash
 git status                  # trabalho commitado
-python main.py test         # 109 testes do backend
+python main.py test         # 118 testes do backend
 cd frontend && npm test     # 91 testes do frontend
 cd frontend && npm run build   # o build tem que passar localmente
 ```
@@ -93,43 +93,120 @@ Detalhes que costumam morder:
   curinga), mas prefira o domínio exato.
 - Toda variável só passa a valer **no deploy seguinte**.
 
-### 1.4 Publicar a biblioteca no bucket
+### 1.4 Publicar a biblioteca
 
-A function não faz parse de MIDI em produção: ela lê JSON pronto. Gere o
-pacote e suba para o bucket.
+A function **não** tem `songs/` (o `.vercelignore` a exclui) e não faz parse de
+MIDI em produção: ela lê JSON pronto de uma URL pública. Gere o pacote:
 
 ```bash
-python main.py build-index --out dist-songs --copy-assets
+python main.py build-index --out dist-songs --copy-assets --skip-video
 ```
 
-Isso produz:
+Saída, e é exatamente este layout que o `RemoteSongStorage` espera:
 
 ```
 dist-songs/index.json
 dist-songs/charts/<song_id>/<instrumento>/<dificuldade>.json
-dist-songs/songs/<song_id>/<arquivos de áudio, vídeo e capa>
+dist-songs/songs/<song_id>/<arquivos de mídia>
 ```
 
-Suba **o conteúdo** de `dist-songs/` para a raiz do bucket (S3, Cloudflare R2,
-Supabase Storage, Vercel Blob — qualquer um serve). `GUITARSLASH_ASSETS_BASE_URL`
-aponta para essa raiz, de forma que `index.json` fique em
-`<BASE_URL>/index.json`.
+`GUITARSLASH_ASSETS_BASE_URL` aponta para a **raiz desse conteúdo**, de modo que
+`index.json` fique em `<BASE_URL>/index.json`. Se não ficar, a API responde 200
+com `count: 0` e o motivo em `errors` — a tela mostra `0 MÚSICA(S)`.
 
-Exemplo com R2/S3:
+#### Quanto pesa
+
+Medido na biblioteca atual (11 músicas):
+
+| Parte | Tamanho | Vai para onde |
+|---|---|---|
+| `index.json` + 100 charts | **6,9 MB** | precisa estar na `BASE_URL` |
+| áudio (`.opus`, 54 stems) | **106,5 MB** | precisa estar na `BASE_URL` |
+| vídeo de fundo (1 música) | **29,8 MB** | opcional |
+| capas | 1,7 MB | opcional |
+
+`--skip-video` derruba o pacote de 142 MB para **112 MB**. Ele não só deixa de
+copiar: tira o vídeo do `index.json` também, senão o backend montaria a URL de
+um arquivo inexistente e o navegador tomaria 404 em toda partida. Sem vídeo o
+jogo roda com o fundo padrão — o plano trata vídeo e capa como opcionais, e
+chart e áudio como obrigatórios.
+
+#### Onde hospedar: Opção A (adotada) — junto do frontend no Netlify
+
+O `netlify.toml` do repositório já faz isso. O build tem três passos:
+
+```
+npm ci && npm run build                                  # 1. SPA
+python3 -m pip install --quiet mido==1.3.3               # 2. só o parser MIDI
+python3 ../main.py build-index --out dist         --copy-assets --skip-video                        # 3. biblioteca em dist/
+```
+
+A ordem importa: o Vite **limpa** `dist/`, então o `build-index` tem que rodar
+depois. E `GUITARSLASH_ASSETS_BASE_URL` passa a ser a própria URL do Netlify:
+
+```
+GUITARSLASH_ASSETS_BASE_URL = https://guitarslash.netlify.app
+```
+
+O que isso compra:
+
+- **mesma origem do frontend**: o navegador baixa áudio e capa sem CORS
+  nenhum. CORS continua valendo só para as chamadas de API à Vercel;
+- nenhum serviço novo, nenhuma credencial de bucket;
+- nada de mídia duplicada no git: a biblioteca é gerada no build, a partir de
+  `songs/`, que já está versionada;
+- adicionar música = commit da pasta em `songs/` e push. O deploy da Vercel
+  **não** precisa ser refeito, ela só lê a URL.
+
+O custo: os 112 MB são copiados em todo deploy do Netlify, e a banda do plano
+free é 100 GB/mês.
+
+Note que o `build-index` só precisa de `mido` — não importa FastAPI nem
+pydantic —, então o passo de Python no build é rápido.
+
+##### Se o passo de Python falhar no Netlify
+
+O build depende de `python3` e `pip` na imagem do Netlify. Se isso quebrar,
+gere o pacote **localmente** e comite:
 
 ```bash
+python main.py build-index --out dist-songs --copy-assets --skip-video
+```
+
+E troque o `command` do `netlify.toml` por:
+
+```
+npm ci && npm run build && cp -r ../dist-songs/. dist/
+```
+
+Funciona igual, sem Python no build. O custo é que os 112 MB passam a viver no
+git — e aí vale tirar `songs/` do versionamento para não ter as duas cópias:
+
+```bash
+git rm -r --cached songs
+echo "songs/" >> .gitignore
+```
+
+(Isso para de versionar daqui para frente; o histórico continua com os
+arquivos, então o clone segue pesado.)
+
+#### Opção B — object storage (Cloudflare R2, S3, Supabase)
+
+```bash
+python main.py build-index --out dist-songs --copy-assets --skip-video
 aws s3 sync dist-songs/ s3://meu-bucket/ --delete
 ```
 
-O bucket precisa de duas coisas, senão o jogo não funciona:
+`GUITARSLASH_ASSETS_BASE_URL` aponta para a raiz pública do bucket.
 
-1. **CORS** liberado para o domínio do Netlify. Sem isso o navegador recusa
-   baixar o áudio.
-2. **Range requests** (`Accept-Ranges: bytes`). Sem isso não há seek de áudio
-   nem de vídeo, e o `VideoEngine` não consegue corrigir sincronia.
+- ✅ mídia fora do git e fora do deploy
+- ✅ no R2 o egress é gratuito, o que importa quando a biblioteca cresce
+- ⚠️ precisa liberar **CORS** para `https://guitarslash.netlify.app`, senão o
+  navegador recusa baixar o áudio
+- ⚠️ precisa suportar **Range requests**, senão não há seek de áudio nem vídeo
 
-Sempre que adicionar música, rode `build-index` de novo e re-sincronize. O
-deploy da Vercel não precisa ser refeito.
+É para onde migrar quando a biblioteca passar do que cabe confortavelmente num
+deploy. A troca é só da variável de ambiente e do `command` do `netlify.toml`.
 
 ### 1.5 Deploy e verificação
 
@@ -256,8 +333,12 @@ Para referência, é o que o arquivo declara:
 | Campo | Valor |
 |---|---|
 | Base directory | `frontend` |
-| Build command | `npm ci && npm run build` |
+| Build command | `npm ci && npm run build` + geração da biblioteca (ver seção 1.4) |
 | Publish directory | `dist` (relativo ao base, ou seja `frontend/dist`) |
+
+O build também publica a biblioteca de músicas na mesma origem — é a Opção A
+da seção 1.4. Por isso o deploy do Netlify demora mais que um SPA puro: ele
+copia ~112 MB de áudio.
 
 ### 2.2 Variável de ambiente
 
@@ -406,7 +487,9 @@ Variáveis locais: copie `.env.example` para `.env` (backend) e
 | Biblioteca vazia no Netlify | `VITE_API_URL` vazia ou errada | corrigir e **rebuildar** (build time) |
 | Erro de CORS no console | `GUITARSLASH_ALLOWED_ORIGINS` sem o domínio exato | ajustar (sem barra final) e redeployar a Vercel |
 | `/api/health` diz `"storage":"local"` | variável não chegou ao ambiente Production | conferir em Settings e redeployar |
-| `"count":0` e `errors` preenchido | `index.json` inacessível | abrir `<BASE_URL>/index.json` no navegador |
+| `"count":0` e `errors` preenchido | `index.json` inacessível | abrir `<BASE_URL>/index.json` no navegador; a `BASE_URL` aponta para a pasta onde está o `index.json`? |
+| `0 MÚSICA(S)` na tela, API sem erro | `BASE_URL` apontando para o lugar errado | seção 1.4 |
+| Vídeo dá 404 em toda partida | pacote gerado sem `--skip-video`, mas o vídeo não foi publicado | regerar com `--skip-video` |
 | Deploy da Vercel estoura o tamanho | `.vercelignore` ausente ou alterado | confirmar que `songs/` está listada |
 | **Tudo na Vercel dá 404, inclusive `/docs`** | `rewrites` engoliu o caminho | `builds` + `routes` (seção 1.6) |
 | 404 com `"path":"/api/index"` | idem | idem |

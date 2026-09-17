@@ -81,6 +81,8 @@ def cmd_build_index(args: argparse.Namespace) -> int:
     sys.argv = ["build_index", "--out", str(args.out)]
     if args.copy_assets:
         sys.argv.append("--copy-assets")
+    if args.skip_video:
+        sys.argv.append("--skip-video")
     build_main()
     return 0
 
@@ -114,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     index = sub.add_parser("build-index", help="gera o pacote da biblioteca para o CDN")
     index.add_argument("--out", type=Path, default=Path("dist-songs"))
     index.add_argument("--copy-assets", action="store_true")
+    index.add_argument(
+        "--skip-video",
+        action="store_true",
+        help="deixa o video de fundo fora do pacote e do indice",
+    )
     index.set_defaults(func=cmd_build_index)
 
     test = sub.add_parser("test", help="roda os testes do backend")

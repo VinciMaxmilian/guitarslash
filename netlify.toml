@@ -1,15 +1,34 @@
 [build]
   base = "frontend"
-  command = "npm ci && npm run build"
+
+  # Tres passos, nesta ordem:
+  #   1. build do SPA (o Vite LIMPA dist/, entao tem que vir antes);
+  #   2. instala o mido (o build-index nao precisa de fastapi, so do parser MIDI);
+  #   3. gera index.json + charts e copia a midia para DENTRO de dist/.
+  #
+  # Resultado: o Netlify serve o frontend E a biblioteca na mesma origem, entao
+  # o navegador baixa audio e capa sem CORS. A API na Vercel le o index.json
+  # daqui (GUITARSLASH_ASSETS_BASE_URL = https://guitarslash.netlify.app).
+  #
+  # --skip-video deixa o video de fundo fora: e o arquivo mais pesado da
+  # biblioteca e o jogo roda sem ele.
+  command = """
+    npm ci && npm run build && \
+    python3 -m pip install --quiet mido==1.3.3 && \
+    python3 ../main.py build-index --out dist --copy-assets --skip-video
+  """
+
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
-  # VITE_API_URL nao fica aqui: e definido na interface do Netlify
-  # (Site configuration > Environment variables), porque muda por site.
-  # Vazio = mesma origem, o que no Netlify NAO funciona: nao ha backend la.
+  PYTHON_VERSION = "3.11"
+  # VITE_API_URL fica na interface do Netlify (Site configuration >
+  # Environment variables), porque muda por site. E lida em BUILD TIME.
 
-# SPA: qualquer rota cai no index.html
+# SPA: qualquer rota cai no index.html.
+# Sem `force`, arquivo existente ganha do redirect, entao /index.json,
+# /charts/... e /songs/... continuam sendo servidos normalmente.
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -20,6 +39,25 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# Midia das musicas: nao tem hash, mas muda raramente e e pesada.
+# Uma semana evita rebaixar 100 MB a cada visita.
+[[headers]]
+  for = "/songs/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# Charts sao pequenos e acompanham a musica.
+[[headers]]
+  for = "/charts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# O indice muda a cada musica nova: revalidar sempre.
+[[headers]]
+  for = "/index.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # O index.html NAO pode ser cacheado, senao o deploy novo nao aparece.
 [[headers]]
