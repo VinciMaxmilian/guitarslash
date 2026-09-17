@@ -173,18 +173,37 @@ export class NoteEngine {
     }
   }
 
-  /** Palhetada. Devolve o julgamento, ou null quando foi overstrum. */
+  /** Palhetada. Erro quebra o combo. Devolve null quando foi overstrum. */
   strum(songTime: number, heldLanes: Set<number>): Judgement | null {
+    return this.attempt(songTime, heldLanes, true)
+  }
+
+  /**
+   * Tentativa silenciosa, usada no modo sem palhetada: cada traste apertado
+   * tenta acertar a nota, e nao acertar NAO e punido.
+   *
+   * Sem isso, montar um acorde (apertar verde e depois vermelho) quebraria o
+   * combo no primeiro traste, porque acorde exige match exato.
+   */
+  tryFret(songTime: number, heldLanes: Set<number>): Judgement | null {
+    return this.attempt(songTime, heldLanes, false)
+  }
+
+  private attempt(
+    songTime: number,
+    heldLanes: Set<number>,
+    penalize: boolean,
+  ): Judgement | null {
     const goodWindow = GAME_CONFIG.timing.good
     const candidate = this.findCandidate(songTime, goodWindow)
 
     if (!candidate) {
-      this.callbacks.onOverstrum()
+      if (penalize) this.callbacks.onOverstrum()
       return null
     }
 
     if (!lanesMatch(candidate.lanes, heldLanes)) {
-      this.callbacks.onOverstrum()
+      if (penalize) this.callbacks.onOverstrum()
       return null
     }
 

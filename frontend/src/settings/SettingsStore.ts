@@ -22,6 +22,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   gameplay: {
     noteSpeed: 5,
+    // Padrao: sem palhetada. Basta apertar o traste certo.
+    requireStrum: false,
+    muteOnMiss: true,
     hitSounds: false,
     showFps: false,
     leftyFlip: false,
@@ -152,6 +155,8 @@ export function validate(input: Settings): Settings {
     },
     gameplay: {
       noteSpeed: Math.round(clamp(input.gameplay?.noteSpeed, 1, 10, 5)),
+      requireStrum: Boolean(input.gameplay?.requireStrum),
+      muteOnMiss: input.gameplay?.muteOnMiss ?? DEFAULT_SETTINGS.gameplay.muteOnMiss,
       hitSounds: Boolean(input.gameplay?.hitSounds),
       showFps: Boolean(input.gameplay?.showFps),
       leftyFlip: Boolean(input.gameplay?.leftyFlip),

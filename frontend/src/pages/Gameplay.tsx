@@ -26,6 +26,7 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
   const [error, setError] = useState<string | null>(null)
   const [needsGesture, setNeedsGesture] = useState(false)
   const [ready, setReady] = useState(false)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
 
   // Monta a engine uma vez por combinacao musica/instrumento/dificuldade.
   useEffect(() => {
@@ -39,14 +40,23 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
         if (cancelled) return
         chartRef.current = chart
 
-        const audioUrl = resolveAssetUrl(song.assets.audio.song ?? Object.values(song.assets.audio)[0])
-        if (!audioUrl) throw new Error('Esta música não tem arquivo de áudio.')
+        // Todos os stems entram na mixagem: `song` costuma ser a base SEM o
+        // instrumento que o jogador escolheu.
+        const audio: Record<string, string> = {}
+        for (const [stem, url] of Object.entries(song.assets.audio ?? {})) {
+          const resolved = resolveAssetUrl(url)
+          if (resolved) audio[stem] = resolved
+        }
+        if (Object.keys(audio).length === 0) {
+          throw new Error('Esta música não tem arquivo de áudio.')
+        }
 
         const engine = new GameEngine({
           canvas,
           video: videoRef.current,
           chart,
-          audioUrl,
+          audio,
+          onLoadProgress: (done, total) => setProgress({ done, total }),
           videoUrl: resolveAssetUrl(song.assets.backgroundVideo),
           settings,
           songDelay: song.delay,
@@ -147,6 +157,11 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
           <div className="panel overlay-box">
             <h2>Carregando</h2>
             <div className="screen-subtitle">{song.title}</div>
+            {progress.total > 0 && (
+              <div className="note">
+                faixas de áudio: {progress.done} de {progress.total}
+              </div>
+            )}
             <div className="loading-bar" />
           </div>
         </div>

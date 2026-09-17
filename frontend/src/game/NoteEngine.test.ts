@@ -187,3 +187,42 @@ describe('NoteEngine', () => {
     expect(engine.firstVisibleIndex(9)).toBe(3)
   })
 })
+
+describe('modo sem palhetada', () => {
+  it('tryFret acerta a nota', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(1, 0, 0)]), cb)
+    expect(engine.tryFret(1.01, new Set([0]))).toBe('perfect')
+    expect(cb.calls.hit).toBe(1)
+  })
+
+  it('tryFret sem nota por perto NAO quebra o combo', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(5, 0, 0)]), cb)
+    engine.tryFret(1, new Set([0]))
+    expect(cb.calls.overstrum).toBe(0)
+    expect(cb.calls.hit).toBe(0)
+  })
+
+  it('tryFret com traste errado NAO quebra o combo', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(1, 0, 0)]), cb)
+    engine.tryFret(1, new Set([4]))
+    expect(cb.calls.overstrum).toBe(0)
+    expect(engine.gates[0].status).toBe('pending')
+  })
+
+  it('acorde montado traste a traste acerta sem punir o caminho', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(1, 0, 0), note(1, 1, 0)]), cb)
+
+    // Primeiro traste: ainda nao forma o acorde, e isso nao pode punir.
+    engine.tryFret(1, new Set([0]))
+    expect(cb.calls.overstrum).toBe(0)
+    expect(cb.calls.hit).toBe(0)
+
+    // Segundo traste completa o acorde.
+    expect(engine.tryFret(1.01, new Set([0, 1]))).toBe('perfect')
+    expect(cb.calls.hit).toBe(1)
+  })
+})

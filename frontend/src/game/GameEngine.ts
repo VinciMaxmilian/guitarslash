@@ -1,4 +1,4 @@
-import { AudioEngine } from './AudioEngine'
+import { AudioEngine, stemForInstrument } from './AudioEngine'
 import { lookAheadFor } from './config'
 import { HighwayRenderer } from './HighwayRenderer'
 import { IntroSequence } from './IntroSequence'
@@ -12,13 +12,15 @@ export interface GameEngineOptions {
   canvas: HTMLCanvasElement
   video: HTMLVideoElement | null
   chart: Chart
-  audioUrl: string
+  /** Todos os stems da musica: nome -> URL. */
+  audio: Record<string, string>
   videoUrl: string | null
   settings: Settings
   /** Offset declarado no song.ini, em segundos. */
   songDelay: number
   onSnapshot: (snapshot: EngineSnapshot) => void
   onFinish: (players: PlayerSnapshot[]) => void
+  onLoadProgress?: (done: number, total: number) => void
 }
 
 const SNAPSHOT_INTERVAL = 0.066 // ~15 Hz: HUD fluido sem re-render por frame
@@ -40,6 +42,10 @@ export class GameEngine {
 
   private sessions: PlayerSession[] = []
   private beats: number[] = []
+
+  /** Stem do instrumento escolhido, quando a musica separa as faixas. */
+  private instrumentStem: string | null = null
+  private stemMuted = false
 
   private rafId = 0
   private lastFrameTime = 0
@@ -75,11 +81,17 @@ export class GameEngine {
 
   async load(): Promise<void> {
     await this.audio.unlock()
-    const tasks: Promise<unknown>[] = [this.audio.load(this.options.audioUrl)]
+    const tasks: Promise<unknown>[] = [
+      this.audio.load(this.options.audio, this.options.onLoadProgress),
+    ]
     if (this.options.videoUrl) {
       tasks.push(this.video.load(this.options.videoUrl))
     }
     await Promise.all(tasks)
+
+    // Descobre qual faixa corresponde ao instrumento escolhido, para poder
+    // cortar o som dele quando o jogador errar.
+    this.instrumentStem = stemForInstrument(this.options.chart.instrument, this.audio.stemNames)
     this.intro.markLoaded()
   }
 
@@ -142,6 +154,10 @@ export class GameEngine {
     this.video.volume = settings.volumes.master * settings.volumes.video
     this.video.offset = settings.calibration.videoOffsetMs / 1000
     this.input.setBindings(0, invert(settings.keyBindings))
+    // Trocar o modo de palhetada vale na hora, sem reiniciar a musica.
+    for (const session of this.sessions) {
+      session.requireStrum = settings.gameplay.requireStrum
+    }
   }
 
   // ------------------------------------------------------------------ estado
@@ -171,8 +187,31 @@ export class GameEngine {
         chart: this.options.chart,
         instrument: this.options.chart.instrument,
         difficulty: this.options.chart.difficulty,
+        requireStrum: this.options.settings.gameplay.requireStrum,
+        onHit: () => this.setInstrumentMuted(false),
+        onMiss: () => this.setInstrumentMuted(true),
+        onOverstrum: () => this.setInstrumentMuted(true),
       }),
     ]
+    this.stemMuted = false
+  }
+
+  /**
+   * Corta o som do instrumento do jogador quando ele erra, e devolve no
+   * proximo acerto. E o feedback mais direto que existe num jogo de ritmo.
+   */
+  private setInstrumentMuted(muted: boolean): void {
+    if (!this.instrumentStem) return
+    if (!this.options.settings.gameplay.muteOnMiss) {
+      if (this.stemMuted) {
+        this.stemMuted = false
+        this.audio.setStemLevel(this.instrumentStem, 1)
+      }
+      return
+    }
+    if (this.stemMuted === muted) return
+    this.stemMuted = muted
+    this.audio.setStemLevel(this.instrumentStem, muted ? 0 : 1)
   }
 
   // ------------------------------------------------------------------ loop

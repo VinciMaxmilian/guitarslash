@@ -92,6 +92,24 @@ export function SettingsScreen({ onBack }: Props) {
             onChange={(noteSpeed) => settingsStore.update({ gameplay: { noteSpeed } })}
           />
           <Toggle
+            label="Exigir palhetada (Espaço)"
+            checked={settings.gameplay.requireStrum}
+            onChange={(requireStrum) => settingsStore.update({ gameplay: { requireStrum } })}
+          />
+          <p className="note">
+            Desligado (padrão): basta apertar o traste certo no tempo, sem palhetar. Ligado: a nota
+            só conta com a palhetada, e palhetar no vazio quebra o combo.
+          </p>
+          <Toggle
+            label="Cortar o instrumento ao errar"
+            checked={settings.gameplay.muteOnMiss}
+            onChange={(muteOnMiss) => settingsStore.update({ gameplay: { muteOnMiss } })}
+          />
+          <p className="note">
+            A música toca completa, com todas as faixas. Quando você erra, só a faixa do
+            instrumento escolhido some até o próximo acerto.
+          </p>
+          <Toggle
             label="Canhoto (inverter lanes)"
             checked={settings.gameplay.leftyFlip}
             onChange={(leftyFlip) => settingsStore.update({ gameplay: { leftyFlip } })}

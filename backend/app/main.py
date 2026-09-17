@@ -9,6 +9,14 @@ O mesmo `create_app` roda em tres lugares:
 
 from __future__ import annotations
 
+if __name__ == "__main__":
+    # Armadilha comum: existem dois main.py. Este e o modulo da aplicacao e
+    # so funciona importado como pacote. O CLI fica na raiz do projeto.
+    raise SystemExit(
+        'Este arquivo e o modulo da aplicacao, nao o CLI. Rode a partir da RAIZ do projeto: python main.py runserver'
+    )
+
+
 import logging
 from pathlib import Path
 

@@ -24,6 +24,13 @@ export interface Settings {
   gameplay: {
     /** 1 (lento) a 10 (rapido). */
     noteSpeed: number
+    /**
+     * false (padrao) = basta apertar o traste certo, sem palhetar.
+     * true = a nota so conta com a palhetada, e palhetar no vazio quebra o combo.
+     */
+    requireStrum: boolean
+    /** Corta o som do instrumento do jogador enquanto ele estiver errando. */
+    muteOnMiss: boolean
     hitSounds: boolean
     showFps: boolean
     leftyFlip: boolean

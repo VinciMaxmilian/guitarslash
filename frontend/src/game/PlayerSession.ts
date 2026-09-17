@@ -9,7 +9,11 @@ export interface PlayerSessionOptions {
   chart: Chart
   instrument: string
   difficulty: string
+  /** false = modo sem palhetada (padrao): o traste certo ja acerta a nota. */
+  requireStrum?: boolean
   onHit?: (event: HitEvent) => void
+  onMiss?: () => void
+  onOverstrum?: () => void
 }
 
 /**
@@ -30,6 +34,10 @@ export class PlayerSession {
   readonly heldLanes = new Set<number>()
   /** Efeitos visuais recentes, consumidos pelo renderer. */
   readonly effects: HitEvent[] = []
+  readonly misses: { lane: number; time: number }[] = []
+
+  /** Alteravel em tempo real pelas configuracoes, sem recriar a sessao. */
+  requireStrum: boolean
 
   private lastJudgement: Judgement | null = null
   private lastJudgementAt = -10
@@ -39,6 +47,7 @@ export class PlayerSession {
     this.name = options.name
     this.instrument = options.instrument
     this.difficulty = options.difficulty
+    this.requireStrum = options.requireStrum ?? false
 
     this.score = new ScoreEngine(options.id, options.name, options.chart.noteCount)
     this.notes = new NoteEngine(options.chart, {
@@ -56,9 +65,14 @@ export class PlayerSession {
         this.score.registerMiss(gate.notes.length)
         this.lastJudgement = 'miss'
         this.lastJudgementAt = gate.time
+        for (const state of gate.notes) {
+          this.misses.push({ lane: state.note.lane, time: gate.time })
+        }
+        this.options.onMiss?.()
       },
       onOverstrum: () => {
         this.score.registerOverstrum()
+        this.options.onOverstrum?.()
       },
       onSustain: (seconds) => {
         this.score.addSustain(seconds)
@@ -77,13 +91,23 @@ export class PlayerSession {
     const lane = laneForAction(action)
 
     if (lane !== null) {
-      if (pressed) this.heldLanes.add(lane)
-      else this.heldLanes.delete(lane)
+      if (!pressed) {
+        this.heldLanes.delete(lane)
+        return
+      }
+      this.heldLanes.add(lane)
+      // Sem palhetada: cada traste apertado ja tenta acertar a nota.
+      if (!this.requireStrum) {
+        this.notes.tryFret(songTime, this.heldLanes)
+      }
       return
     }
 
     if (action === 'strum' && pressed) {
-      this.notes.strum(songTime, this.heldLanes)
+      // No modo sem palhetada a tecla continua funcionando, mas nao pune quem
+      // palheta por habito.
+      if (this.requireStrum) this.notes.strum(songTime, this.heldLanes)
+      else this.notes.tryFret(songTime, this.heldLanes)
       return
     }
 
@@ -99,6 +123,9 @@ export class PlayerSession {
     // Limita o acumulo de efeitos quando o renderer nao os consome.
     if (this.effects.length > 64) {
       this.effects.splice(0, this.effects.length - 64)
+    }
+    if (this.misses.length > 32) {
+      this.misses.splice(0, this.misses.length - 32)
     }
   }
 

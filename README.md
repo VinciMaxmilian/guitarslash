@@ -1,10 +1,10 @@
 # Guitar Slash
 
 Jogo de ritmo de guitarra que roda no navegador. Identidade visual própria —
-palco, neon e metal dos anos 2000 — sem nenhum asset proprietário.
+palco, cartaz e metal dos anos 2000 — sem nenhum asset proprietário.
 
-**Estado atual:** MVP singleplayer completo e jogável.
-Configurações e multiplayer LAN estão nas próximas fases (ver [plan.md](plan.md)).
+**Estado atual:** MVP singleplayer completo e jogável, com tela de
+configurações. O multiplayer LAN é a próxima fase (ver [plan.md](plan.md)).
 
 ---
 
@@ -20,6 +20,22 @@ Sem banco de dados. A arquitetura está preparada para PostgreSQL depois.
 
 ---
 
+## Comandos
+
+Tudo pelo `main.py`, na raiz do projeto:
+
+| Comando | O que faz |
+| --- | --- |
+| `python main.py runserver` | Backend em dev, com auto-reload (porta 8000) |
+| `python main.py host` | Backend + frontend na mesma origem, para a LAN |
+| `python main.py demo` | Gera a música de demonstração |
+| `python main.py build-index` | Gera o pacote da biblioteca para o CDN |
+| `python main.py test` | Roda os testes do backend |
+
+`runserver` aceita `--port`, `--host` e `--no-reload`.
+
+---
+
 ## Rodando localmente
 
 Pré-requisitos: Python 3.11+ e Node 20+.
@@ -32,7 +48,7 @@ python -m venv .venv
 # source .venv/bin/activate   # Linux/macOS
 
 pip install -r backend/requirements-dev.txt
-uvicorn backend.app.main:app --reload --port 8000
+python main.py runserver
 ```
 
 API em <http://localhost:8000/api/songs>, docs em <http://localhost:8000/docs>.
@@ -50,7 +66,7 @@ Jogo em <http://localhost:5173>. O Vite faz proxy de `/api` para o backend.
 ### 3. Uma música para testar
 
 ```bash
-python -m backend.app.tools.make_demo_song
+python main.py demo
 ```
 
 Gera `songs/Guitar Slash - Neon Highway/` com chart e áudio sintetizados por
@@ -62,7 +78,7 @@ código. Para usar suas próprias músicas, veja [songs/README.md](songs/README.
 
 ```bash
 cd frontend && npm run build && cd ..
-python -m backend.app.host --port 8000
+python main.py host --port 8000
 ```
 
 Um único processo serve o SPA, a API e os arquivos das músicas. Ele imprime o
@@ -89,6 +105,35 @@ Tudo remapeável em **Configurações → Controles**. O mapeamento usa a posiç
 física da tecla (`event.code`), então funciona igual em ABNT2 e US.
 
 Nota simples permite ancorar trastes **abaixo** dela. Acorde exige match exato.
+
+---
+
+## Direção de arte
+
+A referência de **sensação** são os jogos de guitarra dos anos 2000: colagem
+ilustrada, papel envelhecido, tipografia de cartaz, paleta quente e suja
+(ferrugem, âmbar, osso, carvão), molduras ornamentadas e iluminação de palco.
+
+A referência de **conteúdo** é nenhuma: não há logo, fonte, ilustração,
+textura ou screenshot de terceiros no projeto. Todo o visual é gerado por CSS
+— gradientes, granulado via SVG inline, vinheta, molduras e tipografia de
+sistema. Funciona offline, o que importa no modo host.
+
+Aplicação por tela:
+
+- **Menu** — logo desgastado de um lado, lista vertical do outro, com
+  hierarquia feita por tamanho de tipo. Rodapé com dicas de controle.
+- **Setlist** — lista em papel envelhecido: título pesado em tinta escura,
+  artista em caixa alta menor, faixa de seleção clara com o título em dourado.
+- **Instrumento / Dificuldade** — lista vertical com faixa de seleção que
+  sangra para fora, ao lado de um painel de cartaz. Navegável por setas.
+- **Gameplay** — a highway continua sendo o elemento mais legível da tela.
+  Bordas em âmbar; o star power esfria tudo para azul gelo.
+- **Resultado** — cartaz: estrelas grandes e score enorme.
+
+Quando houver ilustração própria, basta trocar as camadas de fundo e as
+molduras — as telas não precisam ser reescritas. Detalhes em
+[plan.md](plan.md), seção DIREÇÃO DE ARTE.
 
 ---
 
@@ -135,8 +180,8 @@ a FASE 3 (LAN) reaproveitar a engine em vez de reescrevê-la.
 ## Testes
 
 ```bash
-.venv/Scripts/python -m pytest backend/tests -q   # 65 testes
-cd frontend && npm test                           # 53 testes
+python main.py test          # backend, 65 testes
+cd frontend && npm test      # frontend, 53 testes
 ```
 
 Cobrem: tempo map com mudança de andamento, detecção de instrumentos e
@@ -175,7 +220,7 @@ bundle da function.
 Gere o pacote estático e publique num object storage:
 
 ```bash
-python -m backend.app.tools.build_index --out dist-songs
+python main.py build-index --out dist-songs
 ```
 
 Isso produz `index.json` e os charts já convertidos, para a function não fazer

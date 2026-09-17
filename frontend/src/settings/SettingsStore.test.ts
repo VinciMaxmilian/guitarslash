@@ -52,6 +52,13 @@ describe('validate', () => {
     expect(settings.keyBindings.strum).toBe(DEFAULT_BINDINGS.strum)
   })
 
+  it('padrao e SEM exigir palhetada', () => {
+    expect(DEFAULT_SETTINGS.gameplay.requireStrum).toBe(false)
+    expect(validate({ ...DEFAULT_SETTINGS }).gameplay.requireStrum).toBe(false)
+    // Config antiga, gravada antes da opcao existir, cai no padrao.
+    expect(migrate({ gameplay: { noteSpeed: 6 } }).gameplay.requireStrum).toBe(false)
+  })
+
   it('rejeita nivel de efeitos desconhecido', () => {
     const settings = validate({
       ...DEFAULT_SETTINGS,
