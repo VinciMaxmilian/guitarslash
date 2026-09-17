@@ -19,15 +19,6 @@ frontend/.vite/
 .env.*
 !.env.example
 
-# Decoracao fornecida pelo usuario (capas de revista, etc)
-magazines/
-frontend/public/magazines/
-
-# Biblioteca de musicas (conteudo do usuario, nunca versionado)
-songs/*
-!songs/README.md
-!songs/.gitkeep
-
 # Cache da biblioteca
 .cache/
 
