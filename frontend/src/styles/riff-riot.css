@@ -296,3 +296,99 @@ button {
 .error-box {
   padding: 13px 15px; border: 1px solid rgba(179, 48, 31, 0.6); background: rgba(179, 48, 31, 0.16); color: #f2cfc6; font-size: 13px; line-height: 1.5; margin: 20px;
 }
+
+
+/* ============================================================ LAN LOBBY */
+.lobby {
+  position: absolute; left: 84px; top: 72px; right: 84px; display: flex; flex-direction: column; gap: 18px; z-index: 4;
+}
+.lobby-header { display: flex; align-items: baseline; gap: 22px; flex-wrap: wrap; }
+.lobby-title { font-family: 'Archivo Black', sans-serif; font-size: 44px; color: #3a2a18; }
+.lobby-status {
+  font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: .12em; color: #6b5a46; display: flex; align-items: center; gap: 8px;
+}
+.lobby-dot { width: 9px; height: 9px; border-radius: 50%; background: #6b5a46; }
+.lobby-dot.connected { background: #2f9e4a; }
+.lobby-dot.connecting, .lobby-dot.reconnecting { background: #e0b21c; }
+.lobby-dot.failed { background: #c23a2c; }
+
+.lobby-connecting {
+  font-family: 'Archivo Black', sans-serif; font-size: 26px; color: #efe6d6; padding: 40px;
+}
+.lobby-error { margin: 40px; max-width: 620px; padding: 20px 22px; border: 4px solid #8f2a1e; background: rgba(179, 48, 31, .18); color: #f2cfc6; font-size: 14px; line-height: 1.6; }
+.lobby-error-code { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .18em; color: #e08a7a; margin-bottom: 8px; }
+
+.lobby-warning {
+  font-family: 'Space Mono', monospace; font-size: 12px; line-height: 1.6; letter-spacing: .04em; color: #7a2a18; background: rgba(224, 122, 28, .22); border-left: 4px solid #c23a2c; padding: 9px 13px; max-width: 760px;
+}
+.lobby-note {
+  font-family: 'Space Mono', monospace; font-size: 11px; line-height: 1.6; letter-spacing: .06em; color: #6b5a46; max-width: 760px;
+}
+
+.lobby-players { display: flex; gap: 16px; flex-wrap: wrap; }
+.lobby-card {
+  width: 196px; min-height: 132px; background: #c7b899; border: 4px solid #5c4c3a; padding: 15px 16px; display: flex; flex-direction: column; gap: 7px; box-shadow: 6px 7px 0 rgba(0,0,0,.14);
+}
+.lobby-card.self { border-color: #c2481c; }
+.lobby-card.empty {
+  align-items: center; justify-content: center; background: rgba(199, 184, 153, .35); border-style: dashed; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .16em; color: #6b5a46;
+}
+.lobby-card-name {
+  font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1.1; color: #2c2118; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: break-word;
+}
+.lobby-card-state { font-family: 'Archivo Black', sans-serif; font-size: 14px; letter-spacing: .06em; }
+.lobby-card-state.on { color: #2f9e4a; }
+.lobby-card-state.off { color: #c23a2c; }
+.lobby-card-state.idle { color: #8a7660; }
+.lobby-card-meta {
+  font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .04em; color: #4a3a28; margin-top: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.lobby-badge {
+  font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: .12em; background: #5c4c3a; color: #efe6d6; padding: 2px 5px;
+}
+.lobby-badge.you { background: #c2481c; }
+.lobby-badge.warn { background: #e0b21c; color: #3a2a18; }
+
+.lobby-load { height: 7px; background: rgba(60, 48, 36, .28); overflow: hidden; }
+.lobby-load-fill { height: 100%; background: #2f9e4a; transition: width .18s linear; }
+
+.lobby-controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+.lobby-field {
+  display: flex; flex-direction: column; gap: 5px; font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .14em; color: #6b5a46;
+}
+.lobby-field select {
+  font-family: 'Archivo Black', sans-serif; font-size: 14px; padding: 9px 11px; background: #efe6d6; color: #2c2118; border: 3px solid #5c4c3a;
+}
+.lobby-field select:disabled { opacity: .5; cursor: not-allowed; }
+.lobby-controls .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ======================================================= PLACAR NA PARTIDA */
+.hud-rivals { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; }
+.hud-rival { display: flex; flex-direction: column; gap: 1px; }
+.hud-rival.off { opacity: .45; }
+.hud-rival-name {
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .14em; color: #e08a5a; display: flex; align-items: center; gap: 5px;
+}
+.hud-rival-score { font-family: 'Archivo Black', sans-serif; font-size: 22px; line-height: 1; color: #efe6d6; }
+.hud-rival-meta { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: .1em; color: #b8a58c; }
+.hud-band {
+  margin-top: 14px; padding-top: 10px; border-top: 2px solid rgba(239, 230, 214, .3);
+}
+.hud-band-label { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .18em; color: #e0b21c; }
+.hud-band-score { font-family: 'Archivo Black', sans-serif; font-size: 30px; line-height: 1; color: #e0b21c; }
+
+/* ================================================== RESULTADO MULTIPLAYER */
+.mp-verdict {
+  font-family: 'Archivo Black', sans-serif; font-size: 34px; text-align: center; letter-spacing: .04em;
+}
+.mp-verdict.win { color: #2f9e4a; }
+.mp-verdict.lose { color: #c23a2c; }
+.mp-verdict.tie, .mp-verdict.band { color: #e0b21c; }
+.mp-table { width: 100%; border-collapse: collapse; font-family: 'Space Mono', monospace; font-size: 12px; }
+.mp-table th {
+  text-align: left; padding: 7px 9px; font-size: 10px; letter-spacing: .14em; color: #8a7660; border-bottom: 2px solid rgba(138, 118, 96, .4); font-weight: normal;
+}
+.mp-table td { padding: 8px 9px; border-bottom: 1px solid rgba(138, 118, 96, .2); }
+.mp-table tr.self td { color: #e08a5a; }
+.mp-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mp-rank { font-family: 'Archivo Black', sans-serif; }

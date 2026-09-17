@@ -1,105 +1,299 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '../styles/riff-riot.css'
 import { useUISounds } from '../hooks/useUISounds'
-import { useSettings } from '../hooks/useSettings'
 import type { MultiplayerSession } from '../game/useMultiplayer'
+import type { MPPlayer } from '../game/multiplayerProtocol'
 
 interface Props {
   mp: MultiplayerSession
   onBack: () => void
   onPickSong: () => void
+  /** Musica escolhida na tela de selecao; sO o host consegue aplicar. */
   pickedSongId?: string
 }
 
+const INSTRUMENTS = [
+  { value: 'guitar', label: 'GUITAR' },
+  { value: 'bass', label: 'BASS' },
+  { value: 'drums', label: 'DRUMS' },
+]
+
+const DIFFICULTIES = [
+  { value: 'easy', label: 'EASY' },
+  { value: 'medium', label: 'MEDIUM' },
+  { value: 'hard', label: 'HARD' },
+  { value: 'expert', label: 'EXPERT' },
+]
+
 export function Lobby({ mp, onBack, onPickSong, pickedSongId }: Props) {
-  const settings = useSettings()
   const [instrument, setInstrument] = useState('guitar')
   const [difficulty, setDifficulty] = useState('expert')
   const uiSounds = useUISounds()
 
-  const isReady = mp.room?.players.find(p => p.name === (settings.profileName || 'Player'))?.ready
+  const room = mp.room
+  const me = mp.self()
+  const sentSong = useRef<string | null>(null)
 
+  // Manda a escolha local quando ELA muda, nao quando o ROOM_STATE chega.
+  // Reagir ao ROOM_STATE criava um pingue-pongue: estado chega -> reenvia
+  // escolha -> host rebroadcasta -> reenvia de novo, sem parar.
   useEffect(() => {
-    if (!mp.room) return
+    if (mp.connection !== 'connected') return
     mp.setInstrument(instrument)
-    mp.setDifficulty(difficulty)
-  }, [mp.room, instrument, difficulty, mp.setInstrument, mp.setDifficulty])
+  }, [instrument, mp.connection, mp.setInstrument])
 
   useEffect(() => {
-    if (pickedSongId && mp.room && pickedSongId !== mp.room.songId) {
-      mp.selectSong(pickedSongId, 'versus')
-    }
-  }, [pickedSongId, mp.room, mp.room?.songId, mp.selectSong])
+    if (mp.connection !== 'connected') return
+    mp.setDifficulty(difficulty)
+  }, [difficulty, mp.connection, mp.setDifficulty])
 
-  if (mp.error) {
+  // A musica escolhida na outra tela entra uma vez sO. `sentSong` impede o
+  // reenvio a cada ROOM_STATE quando o host ainda nao confirmou.
+  useEffect(() => {
+    if (!pickedSongId || !mp.isHost) return
+    if (sentSong.current === pickedSongId || room?.songId === pickedSongId) return
+    sentSong.current = pickedSongId
+    mp.selectSong(pickedSongId)
+  }, [pickedSongId, mp.isHost, room?.songId, mp.selectSong])
+
+  if (mp.error?.fatal) {
     return (
       <div className="rr-screen screen-menu">
-        <div className="error-box">ERROR: {mp.error}</div>
-        <button className="btn" onClick={() => { uiSounds.play('back'); onBack() }}>Back</button>
+        <div className="lobby-error">
+          <div className="lobby-error-code">{mp.error.code}</div>
+          <div>{mp.error.message}</div>
+        </div>
+        <button className="btn" onClick={() => { uiSounds.play('back'); onBack() }}>
+          <span>Voltar</span>
+        </button>
       </div>
     )
   }
 
-  if (!mp.room) {
-    return <div className="rr-screen screen-menu"><div style={{color: '#fff', padding: 40}}>CONNECTING TO HOST...</div></div>
+  if (!room || !me) {
+    const texto =
+      mp.connection === 'reconnecting'
+        ? 'RECONECTANDO AO HOST...'
+        : mp.connection === 'failed'
+          ? 'O HOST SAIU DO AR.'
+          : 'CONECTANDO AO HOST...'
+    return (
+      <div className="rr-screen screen-menu">
+        <div className="lobby-connecting">{texto}</div>
+        <button className="btn" onClick={() => { uiSounds.play('back'); onBack() }}>
+          <span>Voltar</span>
+        </button>
+      </div>
+    )
   }
+
+  const loading = room.phase === 'loading'
+  const playing = room.phase === 'playing'
+  const duplicados = new Set(
+    room.players
+      .filter((p) => !p.spectator)
+      .map((p) => p.instrument)
+      .filter((value, index, all) => value && all.indexOf(value) !== index) as string[],
+  )
 
   return (
     <div className="rr-screen screen-diff">
       <div className="diff-bg-1" />
       <div className="diff-bg-2" />
-      
-      <div className="diff-list-container" style={{top: 100, left: 100, gap: 20}}>
-        <div style={{fontFamily: "'Archivo Black', sans-serif", fontSize: 40, color: '#3a2a18'}}>LAN LOBBY</div>
-        
-        <div style={{display: 'flex', gap: 20, flexWrap: 'wrap'}}>
-          {mp.room.players.map(p => (
-            <div key={p.id} style={{background: '#c7b899', border: '4px solid #5c4c3a', padding: 20, width: 200}}>
-              <div style={{fontFamily: "'Archivo Black', sans-serif", fontSize: 24, color: '#2c2118'}}>{p.name}</div>
-              <div style={{fontFamily: "'Archivo Black', sans-serif", fontSize: 16, color: p.ready ? '#2f9e4a' : '#c23a2c'}}>
-                {p.ready ? 'READY' : 'NOT READY'}
-              </div>
-              <div style={{marginTop: 10, fontSize: 14, color: '#4a3a28'}}>
-                {p.instrument || '???'} - {p.difficulty || '???'}
-              </div>
-            </div>
+
+      <div className="lobby">
+        <div className="lobby-header">
+          <div className="lobby-title">LAN LOBBY</div>
+          <div className="lobby-status">
+            <span className={`lobby-dot ${mp.connection}`} />
+            {room.players.length}/{room.maxPlayers} jogadores
+            {mp.clockReady ? ` · ${mp.rttMs} ms` : ' · sincronizando relogio'}
+          </div>
+        </div>
+
+        {mp.error && !mp.error.fatal && (
+          <div className="lobby-warning">{mp.error.message}</div>
+        )}
+
+        {/* Duas maquinas tocando a mesma musica alto na mesma sala viram eco:
+            qualquer desvio de alguns ms fica audivel. */}
+        <div className="lobby-note">
+          Na mesma sala? Use fones, ou deixe o volume alto so no host.
+        </div>
+
+        <div className="lobby-players">
+          {room.players.map((player) => (
+            <PlayerCard
+              key={player.id}
+              player={player}
+              isSelf={player.id === mp.selfId}
+              showLoad={loading || playing}
+              conflito={!!player.instrument && duplicados.has(player.instrument)}
+            />
           ))}
+          {Array.from({ length: Math.max(0, room.maxPlayers - room.players.length) }).map(
+            (_, index) => (
+              <div key={`vazio-${index}`} className="lobby-card empty">
+                AGUARDANDO
+              </div>
+            ),
+          )}
         </div>
 
-        <div style={{marginTop: 40, display: 'flex', gap: 20}}>
-          <button className="btn primary" onClick={() => { uiSounds.play('select'); onPickSong() }}>PICK SONG: {mp.room.songId || 'NONE'}</button>
-          
-          <select value={instrument} onChange={e => {
-            uiSounds.play('scroll')
-            setInstrument(e.target.value)
-          }} style={{padding: 10, fontFamily: "'Archivo Black', sans-serif"}}>
-            <option value="guitar">GUITAR</option>
-            <option value="bass">BASS</option>
-            <option value="drums">DRUMS</option>
-          </select>
+        <div className="lobby-controls">
+          <button
+            className="btn primary"
+            disabled={!mp.isHost || loading || playing}
+            title={mp.isHost ? undefined : 'So o host escolhe a musica'}
+            onClick={() => { uiSounds.play('select'); onPickSong() }}
+          >
+            <span>MUSICA: {room.songId ?? 'NENHUMA'}</span>
+          </button>
 
-          <select value={difficulty} onChange={e => {
-            uiSounds.play('scroll')
-            setDifficulty(e.target.value)
-          }} style={{padding: 10, fontFamily: "'Archivo Black', sans-serif"}}>
-            <option value="easy">EASY</option>
-            <option value="medium">MEDIUM</option>
-            <option value="hard">HARD</option>
-            <option value="expert">EXPERT</option>
-          </select>
+          <label className="lobby-field">
+            MODO
+            <select
+              value={room.mode}
+              disabled={!mp.isHost || loading || playing}
+              onChange={(event) => {
+                uiSounds.play('scroll')
+                mp.setMode(event.target.value)
+              }}
+            >
+              <option value="versus">VERSUS</option>
+              <option value="coop">CO-OP</option>
+            </select>
+          </label>
+
+          <label className="lobby-field">
+            INSTRUMENTO
+            <select
+              value={instrument}
+              disabled={loading || playing}
+              onChange={(event) => {
+                uiSounds.play('scroll')
+                setInstrument(event.target.value)
+              }}
+            >
+              {INSTRUMENTS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="lobby-field">
+            DIFICULDADE
+            <select
+              value={difficulty}
+              disabled={loading || playing}
+              onChange={(event) => {
+                uiSounds.play('scroll')
+                setDifficulty(event.target.value)
+              }}
+            >
+              {DIFFICULTIES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+
+        {room.mode === 'versus' &&
+          new Set(
+            room.players.filter((p) => !p.spectator && p.difficulty).map((p) => p.difficulty),
+          ).size > 1 && (
+            <div className="lobby-warning">
+              Dificuldades diferentes: os scores nao sao comparaveis.
+            </div>
+          )}
+
+        {loading && <div className="lobby-note">Baixando a musica do host...</div>}
+        {me.spectator && (
+          <div className="lobby-warning">
+            A partida ja comecou. Voce entra na proxima musica.
+          </div>
+        )}
       </div>
 
       <div className="rr-control-bar">
-        <div className="rr-control-hint" onClick={() => { uiSounds.play('select'); mp.setReady(!isReady) }} style={{cursor: 'pointer'}}>
+        <div
+          className="rr-control-hint"
+          onClick={() => {
+            if (loading || playing || me.spectator) return
+            uiSounds.play('select')
+            mp.setReady(!me.ready)
+          }}
+          style={{ cursor: loading || playing ? 'default' : 'pointer' }}
+        >
           <div className="rr-key green" />
-          <span className="rr-control-label">{isReady ? 'UNREADY' : 'READY UP'}</span>
+          <span className="rr-control-label">{me.ready ? 'CANCELAR' : 'ESTOU PRONTO'}</span>
         </div>
-        <div className="rr-control-hint" onClick={() => { uiSounds.play('back'); onBack() }} style={{cursor: 'pointer'}}>
+        {mp.isHost && room.phase === 'results' && (
+          <div
+            className="rr-control-hint"
+            onClick={() => { uiSounds.play('select'); mp.returnToLobby() }}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="rr-key yellow" />
+            <span className="rr-control-label">NOVA PARTIDA</span>
+          </div>
+        )}
+        <div
+          className="rr-control-hint"
+          onClick={() => { uiSounds.play('back'); onBack() }}
+          style={{ cursor: 'pointer' }}
+        >
           <div className="rr-key red" />
-          <span className="rr-control-label">LEAVE LOBBY</span>
+          <span className="rr-control-label">SAIR DO LOBBY</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+function PlayerCard({
+  player,
+  isSelf,
+  showLoad,
+  conflito,
+}: {
+  player: MPPlayer
+  isSelf: boolean
+  showLoad: boolean
+  conflito: boolean
+}) {
+  const estado = !player.connected
+    ? { texto: 'CAIU', cls: 'off' }
+    : player.spectator
+      ? { texto: 'ASSISTINDO', cls: 'idle' }
+      : player.ready
+        ? { texto: 'PRONTO', cls: 'on' }
+        : { texto: 'NAO PRONTO', cls: 'off' }
+
+  return (
+    <div className={`lobby-card ${isSelf ? 'self' : ''}`}>
+      <div className="lobby-card-name">
+        {player.name}
+        {player.isHost && <span className="lobby-badge">HOST</span>}
+        {isSelf && <span className="lobby-badge you">VOCE</span>}
+      </div>
+      <div className={`lobby-card-state ${estado.cls}`}>{estado.texto}</div>
+      <div className="lobby-card-meta">
+        {player.instrument ?? '???'} · {player.difficulty ?? '???'}
+        {conflito && <span className="lobby-badge warn">REPETIDO</span>}
+      </div>
+      {showLoad && !player.spectator && (
+        <div className="lobby-load">
+          <div
+            className="lobby-load-fill"
+            style={{ width: `${Math.round(player.loadProgress * 100)}%` }}
+          />
+        </div>
+      )}
     </div>
   )
 }

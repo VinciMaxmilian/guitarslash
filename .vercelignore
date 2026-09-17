@@ -1,0 +1,32 @@
+# O que NAO sobe para a Serverless Function.
+#
+# Motivo principal: songs/ tem 140+ MB de audio e video. O limite de uma
+# Function e de 250 MB descomprimidos, e o plano e explicito: a biblioteca de
+# musicas NAO vai dentro da function. Em producao ela e servida por
+# object storage/CDN (GUITARSLASH_STORAGE=remote).
+songs/
+magazines/
+UI Sounds/
+
+# O frontend e deploy do Netlify, nao da Vercel.
+frontend/
+
+# Ambientes e caches locais
+.venv/
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Testes e ferramentas nao entram no runtime
+backend/tests/
+backend/requirements-dev.txt
+
+# Documentacao e material de trabalho
+plan.md
+DEPLOY.md
+README.md
+*.dc.html
+.vscode/

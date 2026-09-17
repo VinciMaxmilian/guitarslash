@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { api, resolveAssetUrl } from '../api/client'
 import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/types'
 import { GameEngine } from '../game/GameEngine'
+import { ScoreReporter } from '../game/ScoreReporter'
+import type { MultiplayerSession } from '../game/useMultiplayer'
+import type { MPScoreboard } from '../game/multiplayerProtocol'
 import type { Chart, EngineSnapshot, PlayerSnapshot } from '../game/types'
 import { useSettings } from '../hooks/useSettings'
 import { formatNumber, formatPercent, formatTime } from '../utils/format'
@@ -12,18 +15,22 @@ interface Props {
   song: SongSummary
   instrument: string
   difficulty: string
-  multiplayerContext?: any
+  /** Presente apenas em partida LAN. */
+  mp?: MultiplayerSession
   onExit: () => void
   onFinish: (results: PlayerSnapshot[], chart: Chart) => void
 }
 
-export function Gameplay({ song, instrument, difficulty, multiplayerContext, onExit, onFinish }: Props) {
+export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }: Props) {
   const settings = useSettings()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const engineRef = useRef<GameEngine | null>(null)
   const chartRef = useRef<Chart | null>(null)
   const uiSounds = useUISounds()
+  // O snapshot muda a cada frame; o ScoreReporter corta isso para ~10 Hz e
+  // manda so o que mudou. O julgamento das notas nunca depende da rede.
+  const reporter = useRef<ScoreReporter | null>(null)
 
   const [snapshot, setSnapshot] = useState<EngineSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -75,12 +82,12 @@ export function Gameplay({ song, instrument, difficulty, multiplayerContext, onE
         }
 
         setReady(true)
-        if (multiplayerContext) {
-          multiplayerContext.reportLoadProgress(1)
+        if (mp) {
+          mp.reportLoadProgress(1)
         }
         if (engine.needsUserGesture) {
           setNeedsGesture(true)
-        } else if (!multiplayerContext) {
+        } else if (!mp) {
           uiSounds.play('start1')
           uiSounds.play('start2')
           engine.start()
@@ -106,23 +113,43 @@ export function Gameplay({ song, instrument, difficulty, multiplayerContext, onE
     engineRef.current?.applySettings(settings)
   }, [settings])
 
+  // START_AT vem no relogio do HOST. `msUntilStart` aplica o offset medido
+  // pelo ClockSync; comparar o timestamp cru com Date.now() faria a musica
+  // comecar no ato (ou nunca), porque as maquinas nao tem a hora igual.
   useEffect(() => {
-    if (!multiplayerContext || !ready || needsGesture) return
-    const startAt = multiplayerContext.startAt as number | null
-    if (startAt == null) return
-    const wait = Math.max(0, startAt - Date.now())
+    if (!mp || !ready || needsGesture) return
+    const wait = mp.msUntilStart()
+    if (wait == null) return
     const timer = window.setTimeout(() => {
       uiSounds.play('start1')
       uiSounds.play('start2')
       engineRef.current?.start()
     }, wait)
     return () => window.clearTimeout(timer)
-  }, [multiplayerContext, multiplayerContext?.startAt, ready, needsGesture, uiSounds])
+  }, [mp, mp?.startAt, ready, needsGesture, uiSounds])
 
   useEffect(() => {
-    if (!multiplayerContext || !snapshot?.players[0]) return
-    multiplayerContext.reportScore(snapshot.players[0])
-  }, [snapshot?.players?.[0]?.score, snapshot?.players?.[0]?.combo, snapshot?.players?.[0]?.starPowerActive])
+    if (!mp) return
+    reporter.current = new ScoreReporter((payload) => mp.reportScore(payload))
+    return () => {
+      reporter.current = null
+    }
+  }, [mp])
+
+  const me = snapshot?.players[0]
+  useEffect(() => {
+    if (!mp || !me) return
+    reporter.current?.report(me, performance.now())
+  }, [mp, me])
+
+  // Fim da musica: o estado final vai completo e sem throttle, para o host
+  // montar o RESULTS com o numero certo.
+  const finishedRef = useRef(false)
+  useEffect(() => {
+    if (!mp || !me || !snapshot?.finished || finishedRef.current) return
+    finishedRef.current = true
+    mp.reportFinished(reporter.current?.final(me) ?? {})
+  }, [mp, me, snapshot?.finished])
 
   useEffect(() => {
     const onResize = () => engineRef.current?.resize()
@@ -137,7 +164,7 @@ export function Gameplay({ song, instrument, difficulty, multiplayerContext, onE
     engineRef.current?.start()
   }
 
-  const player = snapshot?.players[0]
+  const player = me
   const intro = snapshot?.intro
   const videoUrl = resolveAssetUrl(song.assets.backgroundVideo)
 
@@ -167,7 +194,9 @@ export function Gameplay({ song, instrument, difficulty, multiplayerContext, onE
           duration={snapshot.duration}
           showFps={settings.gameplay.showFps}
           fps={snapshot.fps}
-          multiplayerContext={multiplayerContext}
+          scoreboard={mp?.scoreboard}
+          selfId={mp?.selfId}
+          mode={mp?.room?.mode}
         />
       )}
 
@@ -248,16 +277,22 @@ function Hud({
   duration,
   showFps,
   fps,
-  multiplayerContext,
+  scoreboard,
+  selfId,
+  mode,
 }: {
   player: PlayerSnapshot
   songTime: number
   duration: number
   showFps: boolean
   fps: number
-  multiplayerContext?: any
+  scoreboard?: MPScoreboard | null
+  selfId?: string | null
+  mode?: string
 }) {
-  const others = multiplayerContext?.room?.players.filter((p: any) => p.name !== player.name) || []
+  // O placar dos outros vem do agregado do host (~10 Hz) e e filtrado por id,
+  // nunca por nome: dois jogadores podem se chamar igual.
+  const rivals = (scoreboard?.players ?? []).filter((row) => row.id !== selfId)
 
   return (
     <div className="hud">
@@ -272,18 +307,28 @@ function Hud({
             {player.maxCombo > 0 && ` · máx ${player.maxCombo}`}
           </div>
 
-          {others.length > 0 && (
-            <div style={{ marginTop: 20 }}>
-              {others.map((p: any) => (
-                <div key={p.id} style={{ marginBottom: 10 }}>
-                  <div className="hud-label" style={{ color: '#c2481c' }}>{p.name}</div>
-                  <div className="hud-score" style={{ fontSize: 24 }}>{formatNumber(p.scoreState?.score || 0)}</div>
-                  <div className="hud-combo" style={{ fontSize: 10 }}>
-                    {p.scoreState?.combo > 0 ? `${p.scoreState.combo} combo` : ''}
-                    {p.scoreState?.starPowerActive ? ' ★' : ''}
+          {rivals.length > 0 && (
+            <div className="hud-rivals">
+              {rivals.map((rival) => (
+                <div key={rival.id} className={`hud-rival ${rival.connected ? '' : 'off'}`}>
+                  <div className="hud-rival-name">
+                    {rival.name}
+                    {!rival.connected && ' (CAIU)'}
+                    {rival.starPowerActive && ' ★'}
+                  </div>
+                  <div className="hud-rival-score">{formatNumber(rival.score)}</div>
+                  <div className="hud-rival-meta">
+                    {rival.combo > 0 ? `${rival.combo} combo` : ' '}
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {mode === 'coop' && scoreboard?.bandScore != null && (
+            <div className="hud-band">
+              <div className="hud-band-label">BAND SCORE</div>
+              <div className="hud-band-score">{formatNumber(scoreboard.bandScore)}</div>
             </div>
           )}
         </div>

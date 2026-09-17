@@ -22,7 +22,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.songs import router as songs_router
@@ -49,7 +49,7 @@ def create_app(settings: Settings | None = None, serve_frontend: bool = False) -
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "HEAD", "POST", "OPTIONS"],
         allow_headers=["*"],
         expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
     )
@@ -72,6 +72,26 @@ def create_app(settings: Settings | None = None, serve_frontend: bool = False) -
     return app
 
 
+#: Marca injetada no index.html servido pelo modo host.
+#:
+#: Existe porque o MESMO frontend/dist roda em dois lugares: no Netlify (onde
+#: VITE_API_URL aponta para a Vercel) e na maquina do host (onde tudo e mesma
+#: origem). Se a deteccao dependesse de variavel de build, um dist buildado
+#: para o Netlify tentaria falar com a Vercel rodando na LAN - e o multiplayer
+#: nao funcionaria offline. Com a marca, um build serve os dois casos.
+HOST_MARKER = "<script>window.__GUITARSLASH_HOST__=true</script>"
+
+
+def _host_index_html() -> str:
+    """index.html do dist com a marca de modo host injetada."""
+    html = (FRONTEND_DIST / "index.html").read_text(encoding="utf-8")
+    if HOST_MARKER in html:
+        return html
+    if "</head>" in html:
+        return html.replace("</head>", HOST_MARKER + "</head>", 1)
+    return HOST_MARKER + html
+
+
 def _mount_frontend(app: FastAPI) -> None:
     """Modo host: a mesma origem serve SPA, API e assets.
 
@@ -84,19 +104,25 @@ def _mount_frontend(app: FastAPI) -> None:
         )
         return
 
-    index = FRONTEND_DIST / "index.html"
+    # Lido uma vez: o dist nao muda com o processo rodando.
+    index_html = _host_index_html()
+    dist_root = FRONTEND_DIST.resolve()
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    def index_response() -> HTMLResponse:
+        return HTMLResponse(index_html, headers={"Cache-Control": "no-cache"})
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
         candidate = (FRONTEND_DIST / full_path).resolve()
         if full_path and candidate.is_file():
             try:
-                candidate.relative_to(FRONTEND_DIST.resolve())
+                candidate.relative_to(dist_root)
             except ValueError:
-                return FileResponse(index)
+                # Tentativa de sair do dist (../): devolve o SPA, nao o arquivo.
+                return index_response()
             return FileResponse(candidate)
-        return FileResponse(index)
+        return index_response()
 
 
 app = create_app()

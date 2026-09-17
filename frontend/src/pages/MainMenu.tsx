@@ -2,21 +2,47 @@ import { useEffect, useState } from 'react'
 import '../styles/riff-riot.css'
 import { useUISounds } from '../hooks/useUISounds'
 
+interface MenuOption {
+  label: string
+  action: (() => void) | undefined
+  cls: string
+  disabled: boolean
+  /** Tooltip que explica por que a opcao esta desligada. */
+  hint?: string
+}
+
 interface Props {
   onPlay: () => void
   onSettings: () => void
   onMultiplayer: () => void
+  /**
+   * Multiplayer LAN so existe quando esta pagina vem do processo do host.
+   * No deploy publico nao ha WebSocket: Serverless Function nao mantem
+   * conexao aberta, e pagina em HTTPS nao abre ws:// para IP da rede local.
+   */
+  multiplayerAvailable: boolean
 }
 
-export function MainMenu({ onPlay, onSettings, onMultiplayer }: Props) {
+export function MainMenu({
+  onPlay,
+  onSettings,
+  onMultiplayer,
+  multiplayerAvailable,
+}: Props) {
   const [activeIdx, setActiveIdx] = useState(0)
   const uiSounds = useUISounds()
   
-  const options = [
+  const options: MenuOption[] = [
     { label: 'QUICKPLAY', action: onPlay, cls: 'menu-item-3', disabled: false },
     { label: 'CAREER', action: undefined, cls: 'menu-item-1', disabled: true },
     { label: 'CO-OP CAREER', action: undefined, cls: 'menu-item-2', disabled: true },
-    { label: 'MULTIPLAYER', action: onMultiplayer, cls: 'menu-item-4', disabled: false },
+    {
+      label: 'MULTIPLAYER',
+      action: onMultiplayer,
+      cls: 'menu-item-4',
+      disabled: !multiplayerAvailable,
+      hint: multiplayerAvailable ? undefined : 'Rode o jogo em modo host para jogar na LAN',
+    },
     { label: 'TRAINING', action: undefined, cls: 'menu-item-5', disabled: true },
     { label: 'OPTIONS', action: onSettings, cls: 'menu-item-6', disabled: false },
   ]
@@ -77,6 +103,7 @@ export function MainMenu({ onPlay, onSettings, onMultiplayer }: Props) {
             key={opt.label}
             className={`menu-item-btn ${opt.cls} ${i === activeIdx ? 'active' : ''}`}
             disabled={opt.disabled}
+            title={opt.hint}
             onMouseEnter={() => {
               if (!opt.disabled && activeIdx !== i) {
                 setActiveIdx(i)

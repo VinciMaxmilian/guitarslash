@@ -1,4 +1,5 @@
 import type { Chart } from '../game/types'
+import { IS_HOST_MODE } from '../game/hostMode'
 import type { LibraryResponse, SongSummary } from './types'
 
 /**
@@ -7,8 +8,14 @@ import type { LibraryResponse, SongSummary } from './types'
  * Vazio = mesma origem, que e exatamente o caso do modo host na LAN
  * (o backend serve o SPA) e tambem do dev com o proxy do Vite.
  * No deploy Netlify + Vercel, VITE_API_URL aponta para a Vercel.
+ *
+ * Em modo host, VITE_API_URL e IGNORADO de proposito: o mesmo frontend/dist
+ * pode ter sido buildado para o Netlify (apontando para a Vercel), e a maquina
+ * do host precisa servir a biblioteca dela mesma, funcionando offline.
  */
-export const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+export const API_BASE = IS_HOST_MODE
+  ? ''
+  : (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(

@@ -14,6 +14,7 @@ import type { PlayerSnapshot, Chart } from './game/types'
 import { useBackgroundMusic } from './hooks/useBackgroundMusic'
 import { useSettings } from './hooks/useSettings'
 import { useMultiplayer } from './game/useMultiplayer'
+import { IS_HOST_MODE } from './game/hostMode'
 
 type Screen = 'menu' | 'settings' | 'songs' | 'instrument' | 'difficulty' | 'game' | 'result' | 'lobby'
 
@@ -22,7 +23,7 @@ export function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const [song, setSong] = useState<SongSummary | null>(null)
   const [instrument, setInstrument] = useState<string | null>(null)
-  const [lobbyPick, setLobbyPick] = useState(false)
+  const [multiplayer, setMultiplayer] = useState(false)
   const [selection, setSelection] = useState<{
     song: SongSummary
     instrument: string
@@ -30,8 +31,9 @@ export function App() {
   } | null>(null)
 
   const [results, setResults] = useState<{ players: PlayerSnapshot[]; chart: Chart } | null>(null)
-  const mp = useMultiplayer(settings.profileName || 'Player', lobbyPick)
-  const startedRef = useRef(false)
+  const mp = useMultiplayer(settings.profileName || 'Player', multiplayer)
+  //: Evita entrar duas vezes na mesma partida quando o BEGIN_LOAD se repete.
+  const loadedFor = useRef<string | null>(null)
 
   useBackgroundMusic(screen)
 
@@ -45,28 +47,61 @@ export function App() {
     setScreen('game')
   }, [])
 
+  // BEGIN_LOAD do host: todo mundo esta pronto, entra na tela de jogo.
   useEffect(() => {
-    if (!lobbyPick || !mp.beginLoad || !mp.room?.songId) return
-    if (startedRef.current) return
-    const me = mp.room.players.find(p => p.name === (settings.profileName || 'Player'))
-    if (!me?.instrument || !me?.difficulty) return
-    startedRef.current = true
-    void enterGame(mp.room.songId, me.instrument, me.difficulty)
-  }, [lobbyPick, mp.beginLoad, mp.room, enterGame, settings.profileName])
+    if (!multiplayer || !mp.beginLoad) return
+    const songId = mp.room?.songId
+    const me = mp.self()
+    if (!songId || !me?.instrument || !me.difficulty || me.spectator) return
 
-  const leaveLobby = () => {
-    startedRef.current = false
-    setLobbyPick(false)
+    // A chave inclui a musica: uma segunda partida com a mesma escolha ainda
+    // entra, e um BEGIN_LOAD repetido da mesma partida nao.
+    const key = `${songId}:${me.instrument}:${me.difficulty}`
+    if (loadedFor.current === key) return
+    loadedFor.current = key
+    void enterGame(songId, me.instrument, me.difficulty)
+  }, [multiplayer, mp.beginLoad, mp.room, mp.self, enterGame])
+
+  // Voltou para o lobby (host clicou em NOVA PARTIDA ou trocou a musica):
+  // libera a trava para a proxima partida.
+  useEffect(() => {
+    if (mp.room?.phase === 'lobby') loadedFor.current = null
+  }, [mp.room?.phase])
+
+  // O host saiu do ar no meio do jogo: nao deixa a tela quebrada.
+  useEffect(() => {
+    if (!multiplayer || mp.connection !== 'failed') return
+    if (screen === 'game') setScreen('lobby')
+  }, [multiplayer, mp.connection, screen])
+
+  const leaveMultiplayer = useCallback(() => {
+    loadedFor.current = null
+    setMultiplayer(false)
+    setResults(null)
     setScreen('menu')
-  }
+  }, [])
+
+  const backFromGame = useCallback(() => {
+    loadedFor.current = null
+    setScreen(multiplayer ? 'lobby' : 'songs')
+  }, [multiplayer])
 
   return (
     <>
       {screen === 'menu' && (
         <MainMenu
-          onPlay={() => { setLobbyPick(false); startedRef.current = false; setScreen('songs') }}
+          multiplayerAvailable={IS_HOST_MODE}
+          onPlay={() => {
+            setMultiplayer(false)
+            loadedFor.current = null
+            setScreen('songs')
+          }}
           onSettings={() => setScreen('settings')}
-          onMultiplayer={() => { startedRef.current = false; setLobbyPick(true); setScreen('lobby') }}
+          onMultiplayer={() => {
+            loadedFor.current = null
+            setMultiplayer(true)
+            setScreen('lobby')
+          }}
         />
       )}
 
@@ -75,7 +110,7 @@ export function App() {
       {screen === 'lobby' && (
         <Lobby
           mp={mp}
-          onBack={leaveLobby}
+          onBack={leaveMultiplayer}
           onPickSong={() => setScreen('songs')}
           pickedSongId={song?.id}
         />
@@ -83,10 +118,10 @@ export function App() {
 
       {screen === 'songs' && (
         <SongSelect
-          onBack={() => setScreen(lobbyPick ? 'lobby' : 'menu')}
+          onBack={() => setScreen(multiplayer ? 'lobby' : 'menu')}
           onSelect={(selected) => {
             setSong(selected)
-            if (lobbyPick) {
+            if (multiplayer) {
               setScreen('lobby')
             } else {
               setInstrument(null)
@@ -124,8 +159,8 @@ export function App() {
           song={selection.song}
           instrument={selection.instrument}
           difficulty={selection.difficulty}
-          multiplayerContext={lobbyPick ? mp : undefined}
-          onExit={() => setScreen(lobbyPick ? 'lobby' : 'songs')}
+          mp={multiplayer ? mp : undefined}
+          onExit={backFromGame}
           onFinish={(players, chart) => {
             setResults({ players, chart })
             setScreen('result')
@@ -140,14 +175,19 @@ export function App() {
           difficulty={selection.difficulty}
           players={results.players}
           totalNotes={results.chart.noteCount}
-          onRetry={() => {
-            setResults(null)
-            setScreen('game')
-          }}
+          mp={multiplayer ? mp : undefined}
+          onRetry={
+            multiplayer
+              ? undefined
+              : () => {
+                  setResults(null)
+                  setScreen('game')
+                }
+          }
           onSongSelect={() => {
             setResults(null)
-            startedRef.current = false
-            setScreen(lobbyPick ? 'lobby' : 'songs')
+            loadedFor.current = null
+            setScreen(multiplayer ? 'lobby' : 'songs')
           }}
         />
       )}

@@ -2,13 +2,25 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/index.py": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "memory": 1024
     }
   },
   "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/api/index"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Accept-Ranges",
+          "value": "bytes"
+        }
+      ]
     }
   ]
 }

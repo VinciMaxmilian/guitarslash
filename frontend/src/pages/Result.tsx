@@ -1,4 +1,6 @@
 import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/types'
+import type { MPResults } from '../game/multiplayerProtocol'
+import type { MultiplayerSession } from '../game/useMultiplayer'
 import type { PlayerSnapshot } from '../game/types'
 import { formatNumber, formatPercent } from '../utils/format'
 
@@ -8,7 +10,10 @@ interface Props {
   difficulty: string
   players: PlayerSnapshot[]
   totalNotes: number
-  onRetry: () => void
+  /** Presente apenas em partida LAN. */
+  mp?: MultiplayerSession
+  /** Repetir a musica nao existe em LAN: quem decide isso e o host. */
+  onRetry?: () => void
   onSongSelect: () => void
 }
 
@@ -18,10 +23,12 @@ export function Result({
   difficulty,
   players,
   totalNotes,
+  mp,
   onRetry,
   onSongSelect,
 }: Props) {
   const player = players[0]
+  const results = mp?.results ?? null
 
   return (
     <div className="screen">
@@ -37,6 +44,14 @@ export function Result({
           <span>Voltar</span>
         </button>
       </header>
+
+      {mp && !results && (
+        <div className="panel" style={{ padding: 18 }}>
+          <div className="note">Esperando os outros jogadores terminarem...</div>
+        </div>
+      )}
+
+      {results && <MultiplayerResults results={results} selfId={mp?.selfId ?? null} />}
 
       <div className="panel" style={{ padding: 28, display: 'grid', gap: 22 }}>
         <div style={{ textAlign: 'center', display: 'grid', gap: 8 }}>
@@ -62,14 +77,82 @@ export function Result({
         </div>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="btn primary" onClick={onRetry}>
-            <span>Jogar de novo</span>
-          </button>
-          <button className="btn" onClick={onSongSelect}>
-            <span>Escolher outra música</span>
+          {onRetry && (
+            <button className="btn primary" onClick={onRetry}>
+              <span>Jogar de novo</span>
+            </button>
+          )}
+          <button className={onRetry ? 'btn' : 'btn primary'} onClick={onSongSelect}>
+            <span>{mp ? 'Voltar ao lobby' : 'Escolher outra música'}</span>
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function MultiplayerResults({
+  results,
+  selfId,
+}: {
+  results: MPResults
+  selfId: string | null
+}) {
+  const coop = results.mode === 'coop'
+  const verdict = coop
+    ? { texto: `BAND SCORE ${formatNumber(results.bandScore ?? 0)}`, cls: 'band' }
+    : results.tie
+      ? { texto: 'EMPATE', cls: 'tie' }
+      : results.winnerId === selfId
+        ? { texto: 'VOCE GANHOU', cls: 'win' }
+        : {
+            texto: `${results.players.find((p) => p.id === results.winnerId)?.name ?? '???'} GANHOU`,
+            cls: 'lose',
+          }
+
+  return (
+    <div className="panel" style={{ padding: 24, display: 'grid', gap: 18 }}>
+      <div className={`mp-verdict ${verdict.cls}`}>{verdict.texto}</div>
+
+      {results.mixedDifficulty && (
+        <div className="lobby-warning">
+          As dificuldades foram diferentes: os scores nao sao comparaveis.
+        </div>
+      )}
+
+      <table className="mp-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Jogador</th>
+            <th>Instrumento</th>
+            <th>Dificuldade</th>
+            <th style={{ textAlign: 'right' }}>Score</th>
+            <th style={{ textAlign: 'right' }}>Accuracy</th>
+            <th style={{ textAlign: 'right' }}>Max combo</th>
+            <th style={{ textAlign: 'right' }}>Acertos</th>
+            <th style={{ textAlign: 'right' }}>Erros</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.players.map((row, index) => (
+            <tr key={row.id} className={row.id === selfId ? 'self' : ''}>
+              <td className="mp-rank">{coop ? '-' : index + 1}</td>
+              <td>
+                {row.name}
+                {!row.connected && ' (CAIU)'}
+              </td>
+              <td>{INSTRUMENT_LABELS[row.instrument ?? ''] ?? row.instrument ?? '???'}</td>
+              <td>{DIFFICULTY_LABELS[row.difficulty ?? ''] ?? row.difficulty ?? '???'}</td>
+              <td className="num">{formatNumber(row.score)}</td>
+              <td className="num">{formatPercent(row.accuracy)}</td>
+              <td className="num">{formatNumber(row.maxCombo)}</td>
+              <td className="num">{formatNumber(row.notesHit)}</td>
+              <td className="num">{formatNumber(row.notesMissed)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

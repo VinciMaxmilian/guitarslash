@@ -3,8 +3,9 @@
 Jogo de ritmo de guitarra que roda no navegador. Identidade visual própria —
 palco, cartaz e metal dos anos 2000 — sem nenhum asset proprietário.
 
-**Estado atual:** MVP singleplayer completo e jogável, com tela de
-configurações. O multiplayer LAN é a próxima fase (ver [plan.md](plan.md)).
+**Estado atual:** singleplayer completo e jogável, com tela de configurações,
+e multiplayer LAN funcional (lobby, versus, co-op, até 4 jogadores) no modo
+host. Ver [plan.md](plan.md) para o roteiro completo.
 
 ---
 
@@ -81,14 +82,36 @@ cd frontend && npm run build && cd ..
 python main.py host --port 8000
 ```
 
-Um único processo serve o SPA, a API e os arquivos das músicas. Ele imprime o
-IP da máquina na rede local. É assim que o multiplayer LAN vai funcionar na
-FASE 3, porque:
+Um único processo serve o SPA, a API, os arquivos das músicas e o WebSocket da
+partida. Ele imprime o IP da máquina na rede local; os outros jogadores só
+abrem esse endereço no navegador.
+
+É o **único** caminho do multiplayer LAN, porque:
 
 - Serverless Function na Vercel **não mantém WebSocket aberto**;
 - uma página HTTPS **não pode abrir `ws://` para um IP da LAN** (mixed content).
 
-Origem única elimina CORS, mixed content e certificado de uma vez só.
+Origem única elimina CORS, mixed content e certificado de uma vez só. No site
+público o botão MULTIPLAYER fica desabilitado de propósito — o backend do modo
+host injeta uma marca no `index.html`, e é ela que habilita a interface de LAN.
+Por isso o mesmo `frontend/dist` serve o Netlify e a rede local, sem rebuild.
+
+### Multiplayer LAN
+
+| | |
+| --- | --- |
+| Jogadores | até 4 |
+| Modos | versus (mais pontos vence) e co-op (BAND SCORE somado) |
+| Autoridade | o host manda no lobby; cada cliente manda no próprio score |
+| Sincronia de início | handshake de relógio estilo NTP + `START_AT` |
+| Placar na rede | agregado pelo host a ~10 Hz, só diffs |
+| Desconexão | reconexão automática com backoff; quem cai congela no placar |
+
+A sincronia áudio-nota **nunca** depende da rede: se a rede engasgar, o seu
+jogo continua perfeito e só o placar dos outros fica alguns instantes atrasado.
+
+Detalhes do protocolo: [`backend/app/multiplayer.py`](backend/app/multiplayer.py)
+e [`frontend/src/game/multiplayerProtocol.ts`](frontend/src/game/multiplayerProtocol.ts).
 
 ---
 
@@ -193,9 +216,12 @@ julgamento, combo, multiplicador, star power, intro e configurações.
 
 ## Deploy
 
+**Passo a passo completo: [DEPLOY.md](DEPLOY.md).** Resumo:
+
 ### Frontend — Netlify
 
-`netlify.toml` já está no repositório. Configure a variável:
+`netlify.toml` já está no repositório. Configure a variável (lida em **build
+time**, então mudar exige novo deploy):
 
 ```
 VITE_API_URL = https://<seu-backend>.vercel.app
@@ -203,13 +229,17 @@ VITE_API_URL = https://<seu-backend>.vercel.app
 
 ### Backend — Vercel
 
-`vercel.json` e `api/index.py` já estão prontos. Configure:
+`vercel.json`, `api/index.py`, `.python-version` e `.vercelignore` já estão
+prontos. Configure:
 
 ```
 GUITARSLASH_ALLOWED_ORIGINS = https://<seu-site>.netlify.app
 GUITARSLASH_STORAGE         = remote
 GUITARSLASH_ASSETS_BASE_URL = https://<seu-bucket-ou-cdn>
 ```
+
+O `.vercelignore` mantém `songs/` (140+ MB) fora do bundle da function, cujo
+limite é de 250 MB descomprimidos.
 
 ### Por que `songs/` não funciona em produção
 
@@ -235,6 +265,7 @@ senão o seek de áudio e vídeo não funciona.
 | Charts | parse de MIDI sob demanda | JSON pré-gerado |
 | Assets | servidos pelo backend | servidos pelo CDN |
 | Internet | dispensável | necessária |
+| Multiplayer LAN | disponível | indisponível (sem WebSocket) |
 
 ---
 

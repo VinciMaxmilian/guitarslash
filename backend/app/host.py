@@ -1,24 +1,14 @@
 """Modo host: sobe backend + frontend na mesma origem, na rede local.
 
-    python -m backend.app.host --port 8000
+    python main.py host --port 8000        (recomendado)
+    python -m backend.app.host --port 8000  (equivalente)
 
-Serve o SPA buildado, a API, os assets das musicas e (na FASE 3) o
-WebSocket da partida. Origem unica = sem CORS, sem mixed content,
-sem certificado.
-
-Hoje isto entrega o singleplayer completo a partir de uma unica maquina
-e e a base do multiplayer LAN.
+Serve o SPA buildado, a API, os assets das musicas e o WebSocket da partida.
+Origem unica = sem CORS, sem mixed content, sem certificado - e e por isso que
+o multiplayer LAN passa por aqui e nao pela Vercel.
 """
 
 from __future__ import annotations
-
-if __name__ == "__main__":
-    # Armadilha comum: existem dois main.py. Este e o modulo da aplicacao e
-    # so funciona importado como pacote. O CLI fica na raiz do projeto.
-    raise SystemExit(
-        'Este arquivo e o modulo da aplicacao, nao o CLI. Rode a partir da RAIZ do projeto: python main.py runserver'
-    )
-
 
 import argparse
 import socket

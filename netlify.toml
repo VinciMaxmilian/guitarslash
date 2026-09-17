@@ -5,6 +5,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # VITE_API_URL nao fica aqui: e definido na interface do Netlify
+  # (Site configuration > Environment variables), porque muda por site.
+  # Vazio = mesma origem, o que no Netlify NAO funciona: nao ha backend la.
 
 # SPA: qualquer rota cai no index.html
 [[redirects]]
@@ -12,7 +15,20 @@
   to = "/index.html"
   status = 200
 
+# Assets do Vite tem hash no nome: cache eterno e seguro.
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# O index.html NAO pode ser cacheado, senao o deploy novo nao aparece.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
