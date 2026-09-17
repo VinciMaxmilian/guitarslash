@@ -20,9 +20,9 @@ if __name__ == "__main__":
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.songs import router as songs_router
@@ -66,10 +66,32 @@ def create_app(settings: Settings | None = None, serve_frontend: bool = False) -
             "songsDir": str(settings.songs_dir) if storage.kind == "local" else None,
         }
 
+    @app.exception_handler(404)
+    async def not_found(request: Request, _exc) -> JSONResponse:
+        """404 que diz QUAL caminho chegou, nao so "Not Found".
+
+        Serve para diagnosticar proxy mal configurado: se o caminho que chega
+        nao e o que o navegador pediu, o problema esta na camada de rewrite, e
+        nao na aplicacao. Ja aconteceu com o `rewrites` da Vercel, que
+        substitui o caminho pelo destino (ver DEPLOY.md).
+        """
+        body: dict = {"detail": "rota nao encontrada", "path": request.url.path}
+        if request.url.path in COLLAPSED_PATHS:
+            body["hint"] = (
+                "este caminho e o destino do rewrite, nao o que o cliente pediu: "
+                "a plataforma esta engolindo o caminho original. Na Vercel, use "
+                '"routes" com "dest": "api/index.py" em vez de "rewrites".'
+            )
+        return JSONResponse(status_code=404, content=body)
+
     if serve_frontend:
         _mount_frontend(app)
 
     return app
+
+
+#: Caminhos que so aparecem quando um rewrite substituiu o caminho original.
+COLLAPSED_PATHS = frozenset({"/api/index", "/api/index.py", "/api"})
 
 
 #: Marca injetada no index.html servido pelo modo host.

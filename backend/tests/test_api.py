@@ -138,3 +138,30 @@ def test_rescan(client: TestClient):
 def test_cors_liberado_para_origem_configurada(client: TestClient):
     response = client.get("/api/songs", headers={"Origin": "http://localhost:5173"})
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_404_informa_o_caminho_recebido(client: TestClient):
+    """Sem isto, proxy mal configurado da apenas "Not Found" e nada mais."""
+    response = client.get("/api/nao-existe")
+    assert response.status_code == 404
+    body = response.json()
+    assert body["path"] == "/api/nao-existe"
+    assert "hint" not in body
+
+
+def test_404_no_destino_do_rewrite_explica_o_problema(client: TestClient):
+    """O `rewrites` da Vercel troca o caminho pelo destino e tudo virava 404.
+
+    Quando o caminho que chega e o proprio destino, o 404 diz que a culpa e da
+    camada de rewrite - e nao das rotas da aplicacao.
+    """
+    for path in ("/api/index", "/api"):
+        body = client.get(path).json()
+        assert body["path"] == path
+        assert "rewrite" in body["hint"]
+
+
+def test_rotas_reais_respondem_no_caminho_pedido(client: TestClient):
+    """Guarda contra regressao de roteamento: o caminho pedido e o que vale."""
+    for path in ("/api/health", "/api/songs", "/openapi.json"):
+        assert client.get(path).status_code == 200, path

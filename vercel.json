@@ -6,21 +6,10 @@
       "memory": 1024
     }
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/api/index"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Accept-Ranges",
-          "value": "bytes"
-        }
-      ]
+      "src": "/(.*)",
+      "dest": "api/index.py"
     }
   ]
 }

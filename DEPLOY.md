@@ -2,11 +2,11 @@
 
 Três alvos, com responsabilidades diferentes:
 
-| Alvo | O que roda lá | Precisa de internet |
-|---|---|---|
-| **Netlify** | frontend (SPA do Vite) | sim |
-| **Vercel** | backend (FastAPI como Serverless Function) | sim |
-| **Modo host** | backend + frontend na mesma origem, na LAN | **não** |
+| Alvo | O que roda lá | URL | Precisa de internet |
+|---|---|---|---|
+| **Netlify** | frontend (SPA do Vite) | <https://guitarslash.netlify.app> | sim |
+| **Vercel** | backend (FastAPI como Serverless Function) | <https://guitarslash.vercel.app> | sim |
+| **Modo host** | backend + frontend na mesma origem, na LAN | `http://<ip-da-lan>:8000` | **não** |
 
 O **multiplayer LAN só funciona no modo host**. Netlify e Vercel servem o
 singleplayer e a biblioteca pública. Isso não é limitação da implementação, é
@@ -22,7 +22,7 @@ Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
 
 ```bash
 git status                  # trabalho commitado
-python main.py test         # 97 testes do backend
+python main.py test         # 100 testes do backend
 cd frontend && npm test     # 91 testes do frontend
 cd frontend && npm run build   # o build tem que passar localmente
 ```
@@ -39,7 +39,7 @@ motivo: o script roda `tsc --noEmit` antes do Vite.
 | Arquivo | Para quê |
 |---|---|
 | `api/index.py` | entrypoint; exporta o app ASGI que a Vercel detecta |
-| `vercel.json` | `maxDuration`, memória e rewrite de tudo para a function |
+| `vercel.json` | `maxDuration`, memória e roteamento de tudo para a function |
 | `requirements.txt` | dependências de runtime |
 | `.python-version` | fixa o Python em 3.12 |
 | `.vercelignore` | **impede que `songs/` (143 MB) entre no bundle** |
@@ -75,7 +75,7 @@ Em **Settings → Environment Variables**, ambiente *Production*:
 |---|---|---|
 | `GUITARSLASH_STORAGE` | `remote` | **sim** |
 | `GUITARSLASH_ASSETS_BASE_URL` | URL pública do seu bucket/CDN | **sim** |
-| `GUITARSLASH_ALLOWED_ORIGINS` | `https://SEU-SITE.netlify.app` | **sim** |
+| `GUITARSLASH_ALLOWED_ORIGINS` | `https://guitarslash.netlify.app` | **sim** |
 | `GUITARSLASH_CACHE_DIR` | deixe **vazio** | não |
 
 Detalhes que costumam morder:
@@ -84,13 +84,14 @@ Detalhes que costumam morder:
   function é efêmero e `songs/` foi excluída pelo `.vercelignore`. Com
   `local` a biblioteca aparece vazia.
 - `GUITARSLASH_ALLOWED_ORIGINS` é lista separada por vírgula, **sem barra no
-  final**: `https://meu-site.netlify.app`, não `https://meu-site.netlify.app/`.
-  Errar aqui dá erro de CORS no navegador e biblioteca vazia na tela.
+  final**: `https://guitarslash.netlify.app`, e não
+  `https://guitarslash.netlify.app/`. Errar aqui dá erro de CORS no navegador
+  e biblioteca vazia na tela.
 - `GUITARSLASH_CACHE_DIR` vazio cai no temp do sistema (`/tmp`), o único
   lugar gravável na Vercel. Apontar para outro caminho derruba a function.
-- Você só terá a URL do Netlify depois da Parte 2. Coloque um valor
-  provisório agora e **volte para corrigir** — a variável só passa a valer no
-  deploy seguinte.
+- `*` funciona (o `allow_credentials` é `False`, então o navegador aceita o
+  curinga), mas prefira o domínio exato.
+- Toda variável só passa a valer **no deploy seguinte**.
 
 ### 1.4 Publicar a biblioteca no bucket
 
@@ -139,10 +140,10 @@ vercel --prod
 Confira, trocando pela sua URL:
 
 ```bash
-curl https://SEU-PROJETO.vercel.app/api/health
+curl https://guitarslash.vercel.app/api/health
 # {"status":"ok","storage":"remote","songsDir":null}
 
-curl https://SEU-PROJETO.vercel.app/api/songs | head -c 300
+curl https://guitarslash.vercel.app/api/songs | head -c 300
 # count > 0 e "errors": []
 ```
 
@@ -153,8 +154,44 @@ Leitura do resultado:
 - `"count":0` com erro em `errors` → o `index.json` não está acessível na
   `ASSETS_BASE_URL`. Abra `<BASE_URL>/index.json` no navegador.
 - `"songsDir"` com caminho → ainda está em modo local.
+- `{"detail":"rota nao encontrada","path":"/api/index",...}` → problema de
+  roteamento, não da aplicação. Leia o quadro abaixo.
 
-Guarde a URL: ela é o `VITE_API_URL` da Parte 2.
+### 1.6 A armadilha do `rewrites` (por que tudo dava 404)
+
+Esta configuração **parece** certa e não funciona:
+
+```json
+{ "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }] }
+```
+
+`destination` **substitui** o caminho da requisição. A function recebe sempre
+`/api/index`, então o FastAPI responde 404 para tudo — inclusive `/docs` e
+`/openapi.json`. O sintoma engana: `{"detail":"Not Found"}` vem do FastAPI, o
+que faz parecer erro de rota na aplicação, quando a aplicação está correta e
+nunca viu o caminho original.
+
+O que funciona é `routes` com `dest` apontando para o **arquivo-fonte**, que
+preserva o caminho original:
+
+```json
+{
+  "functions": { "api/index.py": { "maxDuration": 30, "memory": 1024 } },
+  "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
+}
+```
+
+É o que está no `vercel.json` do repositório. Duas observações:
+
+- `routes` não pode conviver com `rewrites`, `redirects`, `headers`,
+  `cleanUrls` nem `trailingSlash` no mesmo arquivo. Se precisar de algum
+  deles, terá que escolher.
+- Se a Vercel reclamar de `functions` junto com `routes`, troque por
+  `"builds": [{ "src": "api/index.py", "use": "@vercel/python" }]` e mantenha
+  o mesmo bloco `routes` — aí o `maxDuration` volta ao default da plataforma.
+
+Para não cair nisso de novo, o 404 da aplicação agora informa o caminho que
+recebeu, e avisa quando esse caminho é o destino do rewrite.
 
 ---
 
@@ -180,7 +217,7 @@ Para referência, é o que o arquivo declara:
 
 | Variável | Valor |
 |---|---|
-| `VITE_API_URL` | `https://SEU-PROJETO.vercel.app` |
+| `VITE_API_URL` | `https://guitarslash.vercel.app` |
 
 Três coisas importantes:
 
@@ -217,7 +254,7 @@ Se usa deploy previews do Netlify e quer que funcionem, inclua o padrão do
 site também:
 
 ```
-https://meu-site.netlify.app,https://deploy-preview-1--meu-site.netlify.app
+https://guitarslash.netlify.app,https://deploy-preview-1--guitarslash.netlify.app
 ```
 
 O `CORSMiddleware` compara a origem exata: não aceita curinga em subdomínio.
@@ -323,6 +360,8 @@ Variáveis locais: copie `.env.example` para `.env` (backend) e
 | `/api/health` diz `"storage":"local"` | variável não chegou ao ambiente Production | conferir em Settings e redeployar |
 | `"count":0` e `errors` preenchido | `index.json` inacessível | abrir `<BASE_URL>/index.json` no navegador |
 | Deploy da Vercel estoura o tamanho | `.vercelignore` ausente ou alterado | confirmar que `songs/` está listada |
+| **Tudo na Vercel dá 404, inclusive `/docs`** | `rewrites` engoliu o caminho | usar `routes` + `dest: api/index.py` (seção 1.6) |
+| 404 com `"path":"/api/index"` | idem | idem |
 | Áudio não dá seek | bucket sem Range requests | habilitar no storage |
 | Vídeo não carrega | bucket sem CORS | liberar o domínio do frontend |
 | MULTIPLAYER desabilitado no site | **correto** | usar o modo host |
