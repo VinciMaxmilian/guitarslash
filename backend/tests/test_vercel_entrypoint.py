@@ -52,21 +52,31 @@ def test_rotas_normais_funcionam_sem_o_parametro(client: TestClient):
 
 
 def test_caminho_na_query_string_e_restaurado(client: TestClient):
-    """Plano B: o caminho viaja na query e o FastAPI roteia normalmente."""
-    response = client.get("/api/index?__p=health")
+    """O caminho viaja na query e o FastAPI roteia normalmente."""
+    response = client.get("/api/index?__p=api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
 def test_caminho_restaurado_aceita_barra_inicial(client: TestClient):
-    assert client.get("/api/index?__p=/health").status_code == 200
+    assert client.get("/api/index?__p=/api/health").status_code == 200
 
 
 def test_caminho_restaurado_com_varios_segmentos(client: TestClient):
     """`/api/songs/rescan` tem que sobreviver a viagem pela query string."""
-    response = client.post("/api/index?__p=songs/rescan")
+    response = client.post("/api/index?__p=api/songs/rescan")
     assert response.status_code == 200
     assert "count" in response.json()
+
+
+def test_caminho_restaurado_fora_de_api(client: TestClient):
+    """O parametro carrega o caminho completo, entao /openapi.json funciona."""
+    assert client.get("/api/index?__p=openapi.json").status_code == 200
+
+
+def test_caminho_com_barras_escapadas_tambem_funciona(client: TestClient):
+    """A Vercel pode mandar o valor percent-encoded; parse_qsl desfaz isso."""
+    assert client.get("/api/index?__p=api%2Fhealth").status_code == 200
 
 
 def test_outros_parametros_de_query_sobrevivem(client: TestClient, entry):
@@ -80,7 +90,7 @@ def test_outros_parametros_de_query_sobrevivem(client: TestClient, entry):
         await send({"type": "http.response.body", "body": b""})
 
     spy_client = TestClient(entry.RestoreOriginalPath(espiao))
-    spy_client.get("/api/index?__p=songs&limit=10&q=abc")
+    spy_client.get("/api/index?__p=api/songs&limit=10&q=abc")
 
     assert capturado["path"] == "/api/songs"
     assert "limit=10" in capturado["query"]

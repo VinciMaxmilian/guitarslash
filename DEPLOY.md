@@ -22,7 +22,7 @@ Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
 
 ```bash
 git status                  # trabalho commitado
-python main.py test         # 107 testes do backend
+python main.py test         # 109 testes do backend
 cd frontend && npm test     # 91 testes do frontend
 cd frontend && npm run build   # o build tem que passar localmente
 ```
@@ -160,34 +160,59 @@ Leitura do resultado:
 ### 1.6 Roteamento: a parte que dá errado
 
 O backend é **uma** function ASGI que precisa receber **todos** os caminhos. A
-Vercel tem três formas de fazer isso e elas falham de maneiras diferentes.
+Vercel não facilita, e cada tentativa falha de um jeito diferente.
 
-#### ❌ `rewrites` — responde 404 em tudo
+#### O problema de fundo
 
-```json
-{ "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }] }
-```
+Em `rewrites`, o campo `destination` **substitui** o caminho da requisição. Com
+`"destination": "/api/index"`, a function recebe sempre `/api/index` e o
+FastAPI responde 404 para tudo — inclusive `/docs` e `/openapi.json`. O
+sintoma engana: o `{"detail":"Not Found"}` vem do FastAPI, o que parece erro de
+rota da aplicação, quando ela está correta e nunca viu o caminho pedido.
 
-`destination` **substitui** o caminho da requisição. A function recebe sempre
-`/api/index`, então o FastAPI responde 404 para tudo — inclusive `/docs` e
-`/openapi.json`. O sintoma engana: o `{"detail":"Not Found"}` vem do FastAPI,
-o que parece erro de rota da aplicação, quando ela está correta e simplesmente
-nunca viu o caminho pedido.
+#### O que não resolve
 
-#### ❌ `routes` + `functions` — `FUNCTION_INVOCATION_FAILED`
+| Config | Resultado |
+|---|---|
+| `rewrites` com `destination: "/api/index"` | function sobe, mas 404 em tudo |
+| `routes` + `functions` | `FUNCTION_INVOCATION_FAILED` — `routes` é do pipeline legado e `functions` do moderno; juntos, a function não é registrada onde o `routes` procura e a invocação falha antes de o Python rodar |
+| `app` envolvido num callable | `FUNCTION_INVOCATION_FAILED` — o builder inspeciona `app` para decidir entre ASGI e WSGI, e um closure pode não ser reconhecido |
+
+Nas duas últimas o erro é de **plataforma**: não há log da aplicação, porque a
+aplicação não roda. Os logs ficam em **Vercel → Deployments → Functions**.
+
+#### O que está no repositório
+
+Em vez de depender de a plataforma preservar o caminho, o caminho vai na
+**query string**:
 
 ```json
 {
-  "functions": { "api/index.py": { "maxDuration": 30 } },
-  "routes": [{ "src": "/(.*)", "dest": "api/index.py" }]
+  "functions": { "api/index.py": { "maxDuration": 30, "memory": 1024 } },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index?__p=$1" }]
 }
 ```
 
-`routes` é do pipeline legado e `functions` é do moderno. Juntos, a function
-não é registrada onde o `routes` procura e a invocação falha antes de o Python
-rodar. Erro 500 de plataforma, sem log da aplicação.
+`api/index.py` traz o middleware `RestoreOriginalPath`, que lê `__p`, devolve o
+caminho ao request e remove o parâmetro antes de entregar ao FastAPI.
 
-#### ✅ `builds` + `routes` — é o que está no repositório
+Por que esta combinação e não outra:
+
+- `rewrites` + `functions` é o **mesmo par que já subia a function com
+  sucesso** neste projeto (ela respondia, só respondia 404). O pipeline é
+  moderno e coerente consigo mesmo — sem mistura com `routes`;
+- `app` continua sendo a instância do FastAPI, que é o objeto que o builder da
+  Vercel reconhece;
+- o caminho não depende mais de comportamento de rewrite: ele chega como dado.
+
+Sem `__p` na URL o middleware não faz nada, então ele fica ligado em dev, nos
+testes e no modo host sem efeito nenhum. Coberto por
+`backend/tests/test_vercel_entrypoint.py`, incluindo caminho com vários
+segmentos, valor percent-encoded e preservação dos outros parâmetros de query.
+
+#### Alternativa mais limpa, se quiser tentar
+
+O pipeline legado completo preserva o caminho sem query string:
 
 ```json
 {
@@ -196,39 +221,11 @@ rodar. Erro 500 de plataforma, sem log da aplicação.
 }
 ```
 
-Pipeline legado inteiro, coerente consigo mesmo. Com `dest` apontando para o
-**arquivo-fonte**, o caminho original chega intacto na function.
-
-Consequências de usar `builds`:
-
-- não dá para usar `functions`, então `maxDuration` e `memory` ficam no
-  default da plataforma. Com `GUITARSLASH_STORAGE=remote` a function só busca
-  JSON pronto, então o default basta;
-- `routes` não convive com `rewrites`, `redirects`, `headers`, `cleanUrls` nem
-  `trailingSlash` no mesmo arquivo;
-- o `.vercelignore` continua valendo — `songs/` segue fora do bundle.
-
-#### 🔧 Plano B, se o roteamento ainda falhar
-
-Se a Vercel mudar de comportamento outra vez, existe uma saída que não depende
-de a plataforma preservar o caminho: mandá-lo na **query string**.
-
-```json
-{
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index?__p=:path*" }
-  ]
-}
-```
-
-`api/index.py` já vem com o wrapper `restore_original_path`, que lê `__p`,
-devolve o caminho ao request e remove o parâmetro antes de entregar ao
-FastAPI. Sem `__p` na URL ele não faz nada, então pode ficar ligado sempre —
-é só trocar o `vercel.json`, sem tocar em código.
-
-Essa rota está coberta por testes (`backend/tests/test_vercel_entrypoint.py`),
-incluindo caminho com vários segmentos (`/api/songs/rescan`) e preservação dos
-outros parâmetros de query.
+Com `dest` apontando para o **arquivo-fonte**, o caminho original chega
+intacto. É mais elegante, mas `builds` exclui `functions` (perde-se
+`maxDuration` e `memory`) e `routes` não convive com `rewrites`, `redirects`,
+`headers`, `cleanUrls` nem `trailingSlash`. Se funcionar no seu projeto, pode
+trocar — o middleware fica inerte, porque não haverá `__p` na URL.
 
 #### Diagnóstico em uma requisição
 
@@ -240,11 +237,9 @@ curl -s https://guitarslash.vercel.app/api/health
 |---|---|
 | `{"status":"ok",...}` | roteamento certo |
 | `{"detail":"rota nao encontrada","path":"/api/index","hint":...}` | caminho engolido pelo rewrite |
-| `FUNCTION_INVOCATION_FAILED` | erro de plataforma: a function não rodou (config inválida ou erro de import) |
-| `{"detail":"Not Found"}` sem `path` | deploy antigo, anterior a este diagnóstico |
-
-O 404 da aplicação informa o caminho que recebeu justamente para separar
-"a aplicação não tem essa rota" de "a aplicação recebeu outro caminho".
+| `FUNCTION_INVOCATION_FAILED` | erro de plataforma: a function não rodou — config inválida ou erro de import. **Veja os logs da Function** |
+| `{"detail":"Not Found"}` sem campo `path` | deploy antigo, anterior a este diagnóstico |
+| Erro de CORS com status 500 | o CORS é sintoma: exceção não tratada não passa pelo middleware. Corrija o 500 |
 
 ---
 

@@ -24,19 +24,19 @@ if str(ROOT) not in sys.path:
 
 from backend.app.main import create_app  # noqa: E402
 
-#: Parametro de escape para plataforma que engole o caminho original.
+#: Parametro que carrega o caminho original quando a plataforma o substitui.
 #:
-#: Contexto: o `rewrites` da Vercel SUBSTITUI o caminho pelo destino, entao a
-#: function recebia sempre `/api/index` e o FastAPI respondia 404 para tudo.
-#: A configuracao do repositorio resolve isso sem gambiarra (DEPLOY.md, secao
-#: 1.6). Este parametro e o plano B, ativado somente pelo vercel.json:
+#: O `rewrites` da Vercel SUBSTITUI o caminho pelo destino: a function recebe
+#: sempre `/api/index` e o FastAPI responde 404 para tudo. Em vez de depender
+#: de a plataforma preservar o caminho, mandamos o caminho na query string e
+#: restauramos aqui. O `vercel.json` faz a parte dele:
 #:
 #:     { "rewrites": [
-#:         { "source": "/api/:path*", "destination": "/api/index?__p=:path*" }
+#:         { "source": "/(.*)", "destination": "/api/index?__p=$1" }
 #:     ] }
 #:
-#: Com isso o caminho viaja na query string e e restaurado aqui. Sem o
-#: parametro na URL, este middleware nao faz absolutamente nada.
+#: Sem o parametro na URL este middleware nao faz absolutamente nada, entao
+#: ele pode ficar ligado em qualquer ambiente (dev, modo host, testes).
 ORIGINAL_PATH_PARAM = "__p"
 
 
@@ -66,7 +66,9 @@ class RestoreOriginalPath:
                 remaining.append((key, value))
 
         if restored is not None:
-            path = "/api/" + restored.lstrip("/")
+            # O parametro carrega o caminho COMPLETO, e nao so o trecho depois
+            # de /api: assim /openapi.json e /docs tambem sobrevivem.
+            path = "/" + restored.lstrip("/")
             scope = dict(scope)
             scope["path"] = path
             scope["raw_path"] = path.encode("latin-1")
