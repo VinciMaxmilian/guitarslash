@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import '../styles/riff-riot.css'
 import {
   DIFFICULTY_LABELS,
-  INSTRUMENT_ICONS,
   INSTRUMENT_LABELS,
   type SongSummary,
 } from '../api/types'

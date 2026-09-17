@@ -1,11 +1,9 @@
-import asyncio
 import json
 import logging
 import time
-from typing import Dict, List, Set, Any
+from typing import List
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -60,6 +58,16 @@ class Room:
 
 room = Room()
 
+
+def _room_can_begin(current: Room) -> bool:
+    if not current.song_id or not current.players:
+        return False
+    return all(
+        p.ready and p.instrument and p.difficulty
+        for p in current.players
+    )
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -99,23 +107,25 @@ async def websocket_endpoint(websocket: WebSocket):
             elif msg_type == "SET_READY":
                 player.ready = payload.get("ready", False)
                 await room.send_state()
+                if _room_can_begin(room):
+                    await room.broadcast("BEGIN_LOAD", {"songId": room.song_id})
             elif msg_type == "SELECT_SONG":
                 # Any player can select a song for now
                 room.song_id = payload.get("songId")
                 room.mode = payload.get("mode", "versus")
                 for p in room.players:
                     p.ready = False
-                    p.instrument = None
-                    p.difficulty = None
+                    p.load_progress = 0.0
                 await room.send_state()
             elif msg_type == "LOAD_PROGRESS":
                 player.load_progress = payload.get("progress", 0.0)
                 await room.send_state()
-                # If all ready and loaded, start
                 if len(room.players) > 0 and all(p.ready and p.load_progress >= 1.0 for p in room.players):
-                    # Start at 3 seconds in the future
-                    start_at = time.time() + 3.0
+                    start_at = int(time.time() * 1000) + 3000
                     await room.broadcast("START_AT", {"timestamp": start_at})
+                    for p in room.players:
+                        p.ready = False
+                        p.load_progress = 0.0
             elif msg_type == "SCORE_UPDATE":
                 player.score_state = payload
                 # In a real scenario we'd batch this, but for now broadcast immediately or let clients poll

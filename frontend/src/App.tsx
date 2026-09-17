@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { api } from './api/client'
 import type { SongSummary } from './api/types'
@@ -12,14 +12,17 @@ import { SongSelect } from './pages/SongSelect'
 import { Lobby } from './pages/Lobby'
 import type { PlayerSnapshot, Chart } from './game/types'
 import { useBackgroundMusic } from './hooks/useBackgroundMusic'
+import { useSettings } from './hooks/useSettings'
+import { useMultiplayer } from './game/useMultiplayer'
 
 type Screen = 'menu' | 'settings' | 'songs' | 'instrument' | 'difficulty' | 'game' | 'result' | 'lobby'
 
 export function App() {
+  const settings = useSettings()
   const [screen, setScreen] = useState<Screen>('menu')
   const [song, setSong] = useState<SongSummary | null>(null)
   const [instrument, setInstrument] = useState<string | null>(null)
-  const [mpContext, setMpContext] = useState<any | null>(null)
+  const [lobbyPick, setLobbyPick] = useState(false)
   const [selection, setSelection] = useState<{
     song: SongSummary
     instrument: string
@@ -27,28 +30,43 @@ export function App() {
   } | null>(null)
 
   const [results, setResults] = useState<{ players: PlayerSnapshot[]; chart: Chart } | null>(null)
+  const mp = useMultiplayer(settings.profileName || 'Player', lobbyPick)
+  const startedRef = useRef(false)
 
   useBackgroundMusic(screen)
 
-  // Pre-fetch para manter o cache quente.
   useEffect(() => {
     void api.library()
   }, [])
 
-  const onMultiplayerStart = async (songId: string, inst: string, diff: string, context: any) => {
+  const enterGame = useCallback(async (songId: string, inst: string, diff: string) => {
     const s = await api.song(songId)
     setSelection({ song: s, instrument: inst, difficulty: diff })
-    setMpContext(context)
     setScreen('game')
+  }, [])
+
+  useEffect(() => {
+    if (!lobbyPick || !mp.beginLoad || !mp.room?.songId) return
+    if (startedRef.current) return
+    const me = mp.room.players.find(p => p.name === (settings.profileName || 'Player'))
+    if (!me?.instrument || !me?.difficulty) return
+    startedRef.current = true
+    void enterGame(mp.room.songId, me.instrument, me.difficulty)
+  }, [lobbyPick, mp.beginLoad, mp.room, enterGame, settings.profileName])
+
+  const leaveLobby = () => {
+    startedRef.current = false
+    setLobbyPick(false)
+    setScreen('menu')
   }
 
   return (
     <>
       {screen === 'menu' && (
-        <MainMenu 
-          onPlay={() => { setMpContext(null); setScreen('songs') }} 
-          onSettings={() => setScreen('settings')} 
-          onMultiplayer={() => setScreen('lobby')}
+        <MainMenu
+          onPlay={() => { setLobbyPick(false); startedRef.current = false; setScreen('songs') }}
+          onSettings={() => setScreen('settings')}
+          onMultiplayer={() => { startedRef.current = false; setLobbyPick(true); setScreen('lobby') }}
         />
       )}
 
@@ -56,19 +74,19 @@ export function App() {
 
       {screen === 'lobby' && (
         <Lobby
-          onBack={() => setScreen('menu')}
+          mp={mp}
+          onBack={leaveLobby}
           onPickSong={() => setScreen('songs')}
           pickedSongId={song?.id}
-          onStart={onMultiplayerStart}
         />
       )}
 
       {screen === 'songs' && (
         <SongSelect
-          onBack={() => setScreen(mpContext ? 'lobby' : 'menu')}
+          onBack={() => setScreen(lobbyPick ? 'lobby' : 'menu')}
           onSelect={(selected) => {
             setSong(selected)
-            if (mpContext) {
+            if (lobbyPick) {
               setScreen('lobby')
             } else {
               setInstrument(null)
@@ -106,8 +124,8 @@ export function App() {
           song={selection.song}
           instrument={selection.instrument}
           difficulty={selection.difficulty}
-          multiplayerContext={mpContext}
-          onExit={() => setScreen(mpContext ? 'lobby' : 'songs')}
+          multiplayerContext={lobbyPick ? mp : undefined}
+          onExit={() => setScreen(lobbyPick ? 'lobby' : 'songs')}
           onFinish={(players, chart) => {
             setResults({ players, chart })
             setScreen('result')
@@ -128,7 +146,8 @@ export function App() {
           }}
           onSongSelect={() => {
             setResults(null)
-            setScreen(mpContext ? 'lobby' : 'songs')
+            startedRef.current = false
+            setScreen(lobbyPick ? 'lobby' : 'songs')
           }}
         />
       )}

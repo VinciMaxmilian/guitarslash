@@ -75,9 +75,12 @@ export function Gameplay({ song, instrument, difficulty, multiplayerContext, onE
         }
 
         setReady(true)
+        if (multiplayerContext) {
+          multiplayerContext.reportLoadProgress(1)
+        }
         if (engine.needsUserGesture) {
           setNeedsGesture(true)
-        } else {
+        } else if (!multiplayerContext) {
           uiSounds.play('start1')
           uiSounds.play('start2')
           engine.start()
@@ -103,13 +106,22 @@ export function Gameplay({ song, instrument, difficulty, multiplayerContext, onE
     engineRef.current?.applySettings(settings)
   }, [settings])
 
-  // Sync multiplayer state
   useEffect(() => {
-    if (multiplayerContext && snapshot?.players[0]) {
-      // Avoid spamming too much; GameEngine can run at 60fps, we only need a few updates per second
-      // For now, since it's local LAN, just sending it every time it updates should be okay.
-      multiplayerContext.reportScore(snapshot.players[0])
-    }
+    if (!multiplayerContext || !ready || needsGesture) return
+    const startAt = multiplayerContext.startAt as number | null
+    if (startAt == null) return
+    const wait = Math.max(0, startAt - Date.now())
+    const timer = window.setTimeout(() => {
+      uiSounds.play('start1')
+      uiSounds.play('start2')
+      engineRef.current?.start()
+    }, wait)
+    return () => window.clearTimeout(timer)
+  }, [multiplayerContext, multiplayerContext?.startAt, ready, needsGesture, uiSounds])
+
+  useEffect(() => {
+    if (!multiplayerContext || !snapshot?.players[0]) return
+    multiplayerContext.reportScore(snapshot.players[0])
   }, [snapshot?.players?.[0]?.score, snapshot?.players?.[0]?.combo, snapshot?.players?.[0]?.starPowerActive])
 
   useEffect(() => {

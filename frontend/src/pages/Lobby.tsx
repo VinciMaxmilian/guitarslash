@@ -1,24 +1,35 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import '../styles/riff-riot.css'
-import { useSettings } from '../hooks/useSettings'
-import { useMultiplayer } from '../game/useMultiplayer'
 import { useUISounds } from '../hooks/useUISounds'
+import { useSettings } from '../hooks/useSettings'
+import type { MultiplayerSession } from '../game/useMultiplayer'
 
 interface Props {
+  mp: MultiplayerSession
   onBack: () => void
-  onStart: (songId: string, instrument: string, difficulty: string, multiplayerContext: any) => void
   onPickSong: () => void
   pickedSongId?: string
 }
 
-export function Lobby({ onBack, onStart, onPickSong, pickedSongId }: Props) {
+export function Lobby({ mp, onBack, onPickSong, pickedSongId }: Props) {
   const settings = useSettings()
-  const mp = useMultiplayer(settings.profileName || 'Player')
   const [instrument, setInstrument] = useState('guitar')
   const [difficulty, setDifficulty] = useState('expert')
   const uiSounds = useUISounds()
 
-  const isReady = mp.room?.players.find(p => p.name === settings.profileName)?.ready
+  const isReady = mp.room?.players.find(p => p.name === (settings.profileName || 'Player'))?.ready
+
+  useEffect(() => {
+    if (!mp.room) return
+    mp.setInstrument(instrument)
+    mp.setDifficulty(difficulty)
+  }, [mp.room, instrument, difficulty, mp.setInstrument, mp.setDifficulty])
+
+  useEffect(() => {
+    if (pickedSongId && mp.room && pickedSongId !== mp.room.songId) {
+      mp.selectSong(pickedSongId, 'versus')
+    }
+  }, [pickedSongId, mp.room, mp.room?.songId, mp.selectSong])
 
   if (mp.error) {
     return (
@@ -31,20 +42,6 @@ export function Lobby({ onBack, onStart, onPickSong, pickedSongId }: Props) {
 
   if (!mp.room) {
     return <div className="rr-screen screen-menu"><div style={{color: '#fff', padding: 40}}>CONNECTING TO HOST...</div></div>
-  }
-
-  // Auto-sync picked song to host if this client picked it
-  if (pickedSongId && pickedSongId !== mp.room.songId) {
-    mp.selectSong(pickedSongId, 'versus')
-  }
-
-  // If host forces start
-  if (mp.startAt && mp.room.songId) {
-    const me = mp.room.players.find(p => p.name === settings.profileName)
-    if (me?.instrument && me?.difficulty) {
-      setTimeout(() => onStart(mp.room!.songId!, me.instrument!, me.difficulty!, mp), 100)
-      return <div className="rr-screen screen-menu"><div style={{color: '#fff', padding: 40}}>PREPARING GAME...</div></div>
-    }
   }
 
   return (
@@ -75,7 +72,6 @@ export function Lobby({ onBack, onStart, onPickSong, pickedSongId }: Props) {
           <select value={instrument} onChange={e => {
             uiSounds.play('scroll')
             setInstrument(e.target.value)
-            mp.setInstrument(e.target.value)
           }} style={{padding: 10, fontFamily: "'Archivo Black', sans-serif"}}>
             <option value="guitar">GUITAR</option>
             <option value="bass">BASS</option>
@@ -85,7 +81,6 @@ export function Lobby({ onBack, onStart, onPickSong, pickedSongId }: Props) {
           <select value={difficulty} onChange={e => {
             uiSounds.play('scroll')
             setDifficulty(e.target.value)
-            mp.setDifficulty(e.target.value)
           }} style={{padding: 10, fontFamily: "'Archivo Black', sans-serif"}}>
             <option value="easy">EASY</option>
             <option value="medium">MEDIUM</option>

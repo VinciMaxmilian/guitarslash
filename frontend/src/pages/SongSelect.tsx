@@ -6,7 +6,7 @@ import {
   type SongSummary,
 } from '../api/types'
 import { useSettings } from '../hooks/useSettings'
-import { formatTime, formatNumber } from '../utils/format'
+import { formatNumber } from '../utils/format'
 import { useUISounds } from '../hooks/useUISounds'
 
 interface Props {
@@ -18,13 +18,11 @@ export function SongSelect({ onBack, onSelect }: Props) {
   const settings = useSettings()
   const [library, setLibrary] = useState<LibraryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const previewRef = useRef<HTMLAudioElement | null>(null)
   const uiSounds = useUISounds()
 
   const load = async (rescan = false) => {
-    setLoading(true)
     setError(null)
     try {
       const data = rescan ? await api.rescan() : await api.library()
@@ -32,8 +30,6 @@ export function SongSelect({ onBack, onSelect }: Props) {
       setSelectedId((current) => current ?? data.songs.find(isPlayable)?.id ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
     }
   }
 
