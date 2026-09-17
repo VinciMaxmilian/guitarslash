@@ -6,21 +6,24 @@ import { GameEngine } from '../game/GameEngine'
 import type { Chart, EngineSnapshot, PlayerSnapshot } from '../game/types'
 import { useSettings } from '../hooks/useSettings'
 import { formatNumber, formatPercent, formatTime } from '../utils/format'
+import { useUISounds } from '../hooks/useUISounds'
 
 interface Props {
   song: SongSummary
   instrument: string
   difficulty: string
+  multiplayerContext?: any
   onExit: () => void
   onFinish: (results: PlayerSnapshot[], chart: Chart) => void
 }
 
-export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Props) {
+export function Gameplay({ song, instrument, difficulty, multiplayerContext, onExit, onFinish }: Props) {
   const settings = useSettings()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const engineRef = useRef<GameEngine | null>(null)
   const chartRef = useRef<Chart | null>(null)
+  const uiSounds = useUISounds()
 
   const [snapshot, setSnapshot] = useState<EngineSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -75,6 +78,8 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
         if (engine.needsUserGesture) {
           setNeedsGesture(true)
         } else {
+          uiSounds.play('start1')
+          uiSounds.play('start2')
           engine.start()
         }
       } catch (err) {
@@ -91,12 +96,21 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
     }
     // settings entra so na montagem; mudancas sao aplicadas pelo efeito abaixo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song.id, instrument, difficulty])
+  }, [song.id, instrument, difficulty, uiSounds])
 
   // Configuracoes alteradas em tempo real chegam na engine sem remontar nada.
   useEffect(() => {
     engineRef.current?.applySettings(settings)
   }, [settings])
+
+  // Sync multiplayer state
+  useEffect(() => {
+    if (multiplayerContext && snapshot?.players[0]) {
+      // Avoid spamming too much; GameEngine can run at 60fps, we only need a few updates per second
+      // For now, since it's local LAN, just sending it every time it updates should be okay.
+      multiplayerContext.reportScore(snapshot.players[0])
+    }
+  }, [snapshot?.players?.[0]?.score, snapshot?.players?.[0]?.combo, snapshot?.players?.[0]?.starPowerActive])
 
   useEffect(() => {
     const onResize = () => engineRef.current?.resize()
@@ -106,6 +120,8 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
 
   const startNow = () => {
     setNeedsGesture(false)
+    uiSounds.play('start1')
+    uiSounds.play('start2')
     engineRef.current?.start()
   }
 
@@ -139,6 +155,7 @@ export function Gameplay({ song, instrument, difficulty, onExit, onFinish }: Pro
           duration={snapshot.duration}
           showFps={settings.gameplay.showFps}
           fps={snapshot.fps}
+          multiplayerContext={multiplayerContext}
         />
       )}
 
@@ -219,13 +236,17 @@ function Hud({
   duration,
   showFps,
   fps,
+  multiplayerContext,
 }: {
   player: PlayerSnapshot
   songTime: number
   duration: number
   showFps: boolean
   fps: number
+  multiplayerContext?: any
 }) {
+  const others = multiplayerContext?.room?.players.filter((p: any) => p.name !== player.name) || []
+
   return (
     <div className="hud">
       {showFps && <div className="fps">{fps} fps</div>}
@@ -238,6 +259,21 @@ function Hud({
             {player.combo > 0 ? `${player.combo} de combo` : 'sem combo'}
             {player.maxCombo > 0 && ` · máx ${player.maxCombo}`}
           </div>
+
+          {others.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              {others.map((p: any) => (
+                <div key={p.id} style={{ marginBottom: 10 }}>
+                  <div className="hud-label" style={{ color: '#c2481c' }}>{p.name}</div>
+                  <div className="hud-score" style={{ fontSize: 24 }}>{formatNumber(p.scoreState?.score || 0)}</div>
+                  <div className="hud-combo" style={{ fontSize: 10 }}>
+                    {p.scoreState?.combo > 0 ? `${p.scoreState.combo} combo` : ''}
+                    {p.scoreState?.starPowerActive ? ' ★' : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ textAlign: 'center' }}>

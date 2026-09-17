@@ -40,9 +40,66 @@ interface Stem {
 /** `preview` e um trecho curto para a tela de selecao, nunca parte da mixagem. */
 const EXCLUDED_STEMS = new Set(['preview'])
 
-/** Stems que entram mais baixos por padrao. */
+/** Stems que entram mais baixos na mixagem da base. */
 const DEFAULT_LEVELS: Record<string, number> = {
   crowd: 0.35,
+}
+
+/** Nome interno da base ja somada. */
+const BACKING_STEM = '__backing'
+
+/**
+ * Soma varios AudioBuffers num so, canal a canal.
+ *
+ * Cresce conforme aparecem stems mais longos, e sobe para estereo se algum
+ * stem tiver dois canais. Assim nao dependemos de todos os arquivos do pacote
+ * terem exatamente a mesma duracao.
+ */
+class Mixdown {
+  private channels: Float32Array<ArrayBuffer>[] = []
+  private length = 0
+  private sampleRate = 0
+
+  add(buffer: AudioBuffer, level: number): void {
+    this.sampleRate = buffer.sampleRate
+    this.grow(buffer.numberOfChannels, buffer.length)
+
+    for (let channel = 0; channel < this.channels.length; channel++) {
+      // Mono num destino estereo entra nos dois lados.
+      const source = buffer.getChannelData(Math.min(channel, buffer.numberOfChannels - 1))
+      const target = this.channels[channel]
+      for (let i = 0; i < source.length; i++) {
+        target[i] += source[i] * level
+      }
+    }
+  }
+
+  private grow(channelCount: number, length: number): void {
+    const channels = Math.max(this.channels.length, channelCount)
+    const size = Math.max(this.length, length)
+    if (channels === this.channels.length && size === this.length) return
+
+    const grown: Float32Array<ArrayBuffer>[] = []
+    for (let channel = 0; channel < channels; channel++) {
+      const next = new Float32Array(size)
+      const previous = this.channels[channel] ?? this.channels[0]
+      if (previous) next.set(previous)
+      grown.push(next)
+    }
+    this.channels = grown
+    this.length = size
+  }
+
+  toAudioBuffer(ctx: AudioContext): AudioBuffer | null {
+    if (this.channels.length === 0 || this.length === 0) return null
+    const buffer = ctx.createBuffer(this.channels.length, this.length, this.sampleRate)
+    for (let channel = 0; channel < this.channels.length; channel++) {
+      buffer.copyToChannel(this.channels[channel], channel)
+    }
+    // Libera as copias de trabalho assim que o buffer final existe.
+    this.channels = []
+    return buffer
+  }
 }
 
 export class AudioEngine {
@@ -54,6 +111,9 @@ export class AudioEngine {
   private zeroCtxTime = 0
   private pausedAt = 0
   private running = false
+
+  /** Stem isolado do instrumento do jogador, quando o pacote separa as faixas. */
+  private soloStem: string | null = null
 
   private _volume = 1
 
@@ -86,11 +146,20 @@ export class AudioEngine {
   }
 
   /**
-   * Carrega todos os stems em paralelo. Um stem que falhar sozinho nao
-   * derruba a musica - so some da mixagem.
+   * Carrega os stems e monta DOIS buffers: a base (todos os stems somados) e
+   * o instrumento do jogador, separado para poder ser cortado quando ele erra.
+   *
+   * Por que somar em vez de guardar cada stem: um AudioBuffer descomprimido
+   * custa ~44100 * 4 bytes por canal por segundo. Uma musica de 7 minutos com
+   * 7 stems passaria de 1 GB de RAM. Somando, o pico fica em dois buffers.
+   *
+   * A decodificacao e SEQUENCIAL de proposito: em paralelo, todos os arquivos
+   * ficariam descomprimidos na memoria ao mesmo tempo, que e exatamente o que
+   * estamos evitando.
    */
   async load(
     urls: Record<string, string>,
+    instrument?: string,
     onProgress?: (done: number, total: number) => void,
   ): Promise<void> {
     const entries = Object.entries(urls).filter(([name]) => !EXCLUDED_STEMS.has(name))
@@ -99,40 +168,51 @@ export class AudioEngine {
     }
 
     const ctx = this.context
-    let done = 0
-    const failures: unknown[] = []
+    const soloName = instrument ? stemForInstrument(instrument, entries.map(([name]) => name)) : null
 
-    const loaded = await Promise.all(
-      entries.map(async ([name, url]) => {
-        try {
-          const response = await fetch(url)
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          const data = await response.arrayBuffer()
-          const buffer = await ctx.decodeAudioData(data)
-          return { name, buffer }
-        } catch (error) {
-          failures.push(error)
-          return null
-        } finally {
-          done++
-          onProgress?.(done, entries.length)
+    const backing = new Mixdown()
+    let solo: AudioBuffer | null = null
+    const failures: unknown[] = []
+    let done = 0
+
+    for (const [name, url] of entries) {
+      try {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const data = await response.arrayBuffer()
+        const buffer = await ctx.decodeAudioData(data)
+
+        if (name === soloName) {
+          solo = buffer
+        } else {
+          backing.add(buffer, DEFAULT_LEVELS[name] ?? 1)
         }
-      }),
-    )
+      } catch (error) {
+        failures.push(error)
+      } finally {
+        done++
+        onProgress?.(done, entries.length)
+      }
+    }
 
     this.stems = []
-    for (const item of loaded) {
-      if (!item) continue
-      const gain = ctx.createGain()
-      const level = DEFAULT_LEVELS[item.name] ?? 1
-      gain.gain.value = level
-      gain.connect(this.master!)
-      this.stems.push({ name: item.name, buffer: item.buffer, gain, source: null, level })
-    }
+
+    const backingBuffer = backing.toAudioBuffer(ctx)
+    if (backingBuffer) this.addStem(BACKING_STEM, backingBuffer)
+    if (solo && soloName) this.addStem(soloName, solo)
 
     if (this.stems.length === 0) {
       throw new AudioDecodeError(entries[0][1], failures[0])
     }
+
+    this.soloStem = solo && soloName ? soloName : null
+  }
+
+  private addStem(name: string, buffer: AudioBuffer): void {
+    const gain = this.context.createGain()
+    gain.gain.value = 1
+    gain.connect(this.master!)
+    this.stems.push({ name, buffer, gain, source: null, level: 1 })
   }
 
   /** Garante que o contexto esteja ativo. Precisa de um gesto do usuario antes. */
@@ -192,23 +272,29 @@ export class AudioEngine {
     return this.ctx.currentTime - this.zeroCtxTime
   }
 
+  /** True quando da para cortar so o instrumento do jogador. */
+  get hasIsolatedInstrument(): boolean {
+    return this.soloStem !== null
+  }
+
   /**
-   * Ajusta o volume de um stem, com rampa curta para nao estalar.
-   * Usado para cortar o instrumento do jogador quando ele erra.
+   * Ajusta o volume do instrumento do jogador, com rampa curta para nao
+   * estalar. E o que corta o som quando ele erra.
    */
-  setStemLevel(name: string, level: number, rampSeconds = 0.04): void {
+  setInstrumentLevel(level: number, rampSeconds = 0.05): void {
+    if (!this.soloStem) return
+    this.setStemLevel(this.soloStem, level, rampSeconds)
+  }
+
+  setStemLevel(name: string, level: number, rampSeconds = 0.05): void {
     const stem = this.stems.find((item) => item.name === name)
     if (!stem || !this.ctx) return
-    const target = Math.max(0, Math.min(1, level)) * (DEFAULT_LEVELS[name] ?? 1)
+    const target = Math.max(0, Math.min(1, level)) * stem.level
     if (Math.abs(stem.gain.gain.value - target) < 0.001) return
     const now = this.ctx.currentTime
     stem.gain.gain.cancelScheduledValues(now)
     stem.gain.gain.setValueAtTime(stem.gain.gain.value, now)
     stem.gain.gain.linearRampToValueAtTime(target, now + rampSeconds)
-  }
-
-  hasStem(name: string): boolean {
-    return this.stems.some((stem) => stem.name === name)
   }
 
   get volume(): number {
@@ -225,6 +311,7 @@ export class AudioEngine {
   dispose(): void {
     this.stopSources()
     this.stems = []
+    this.soloStem = null
     if (this.ctx) {
       void this.ctx.close().catch(() => undefined)
       this.ctx = null

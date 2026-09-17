@@ -26,13 +26,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.songs import router as songs_router
+from .multiplayer import router as multiplayer_router
 from .config import ROOT, Settings, load_settings
 from .storage import create_storage
 
 logging.basicConfig(level=logging.INFO)
 
 FRONTEND_DIST = ROOT / "frontend" / "dist"
-
 
 def create_app(settings: Settings | None = None, serve_frontend: bool = False) -> FastAPI:
     settings = settings or load_settings()
@@ -55,6 +55,7 @@ def create_app(settings: Settings | None = None, serve_frontend: bool = False) -
     )
 
     app.include_router(songs_router)
+    app.include_router(multiplayer_router)
 
     @app.get("/api/health", tags=["health"])
     def health() -> dict:

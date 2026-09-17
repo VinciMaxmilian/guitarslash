@@ -1,53 +1,112 @@
-import { ControlBar } from '../components/ControlBar'
+import { useEffect, useState } from 'react'
+import '../styles/riff-riot.css'
+import { useUISounds } from '../hooks/useUISounds'
 
 interface Props {
   onPlay: () => void
   onSettings: () => void
+  onMultiplayer: () => void
 }
 
-/**
- * Menu principal: logo desgastado de um lado, lista vertical do outro,
- * com hierarquia feita por tamanho de tipo - nada de caixinhas.
- */
-export function MainMenu({ onPlay, onSettings }: Props) {
+export function MainMenu({ onPlay, onSettings, onMultiplayer }: Props) {
+  const [activeIdx, setActiveIdx] = useState(0)
+  const uiSounds = useUISounds()
+  
+  const options = [
+    { label: 'QUICKPLAY', action: onPlay, cls: 'menu-item-3', disabled: false },
+    { label: 'CAREER', action: undefined, cls: 'menu-item-1', disabled: true },
+    { label: 'CO-OP CAREER', action: undefined, cls: 'menu-item-2', disabled: true },
+    { label: 'MULTIPLAYER', action: onMultiplayer, cls: 'menu-item-4', disabled: false },
+    { label: 'TRAINING', action: undefined, cls: 'menu-item-5', disabled: true },
+    { label: 'OPTIONS', action: onSettings, cls: 'menu-item-6', disabled: false },
+  ]
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIdx((idx) => {
+          let next = (idx + 1) % options.length
+          while (options[next].disabled) next = (next + 1) % options.length
+          return next
+        })
+        uiSounds.play('scroll')
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIdx((idx) => {
+          let next = (idx - 1 + options.length) % options.length
+          while (options[next].disabled) next = (next - 1 + options.length) % options.length
+          return next
+        })
+        uiSounds.play('scroll')
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (!options[activeIdx].disabled) {
+          uiSounds.play('select')
+          options[activeIdx].action?.()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activeIdx, options, uiSounds])
+
   return (
-    <>
-      <div className="menu">
-        <div className="menu-brand">
-          <h1 className="logo">
-            Guitar
-            <br />
-            Slash
-          </h1>
-          <div className="logo-rule" />
-          <div className="logo-sub">Legends of nothing</div>
+    <div className="rr-screen screen-menu">
+      <div className="menu-bg-1" />
+      <div className="menu-bg-2" />
+      <div className="menu-box-1" />
+      <div className="menu-box-2" />
+      <div className="menu-box-3" />
+      <div className="menu-vignette" />
+
+      <div className="menu-title-container">
+        <div className="menu-title-box">
+          <div className="menu-title-part1">GUITAR</div>
+          <div className="menu-title-part2">SLASH</div>
+          <div className="menu-title-line" />
+          <div className="menu-title-sub">CHAPTER THREE</div>
         </div>
-
-        <nav className="menu-list">
-          <button className="menu-item big" onClick={onPlay}>
-            Quickplay
-          </button>
-          <button className="menu-item mid" disabled title="Chega na Fase 3">
-            Co-op LAN<span className="tag">fase 3</span>
-          </button>
-          <button className="menu-item mid" disabled title="Chega na Fase 3">
-            Versus LAN<span className="tag">fase 3</span>
-          </button>
-          <button className="menu-item small" onClick={onSettings}>
-            Opções
-          </button>
-        </nav>
+        <div className="menu-tape-1" />
+        <div className="menu-tape-2" />
       </div>
 
-      <div style={{ position: 'absolute', bottom: 22, left: 0, right: 0, zIndex: 3 }}>
-        <ControlBar
-          hints={[
-            { key: '↑↓', label: 'Navegar', color: 'gold' },
-            { key: '⏎', label: 'Selecionar', color: 'green' },
-            { key: 'A S D F G', label: 'Trastes', color: 'blue' },
-          ]}
-        />
+      <div className="menu-list-container">
+        {options.map((opt, i) => (
+          <button
+            key={opt.label}
+            className={`menu-item-btn ${opt.cls} ${i === activeIdx ? 'active' : ''}`}
+            disabled={opt.disabled}
+            onMouseEnter={() => {
+              if (!opt.disabled && activeIdx !== i) {
+                setActiveIdx(i)
+                uiSounds.play('scroll')
+              }
+            }}
+            onClick={() => {
+              if (!opt.disabled) {
+                uiSounds.play('select')
+                opt.action?.()
+              }
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
-    </>
+
+      <div className="menu-debug">DEBUG MENU</div>
+
+      <div className="rr-control-bar">
+        <div className="rr-control-hint no-border">
+          <div className="rr-key green" />
+          <span className="rr-control-label">SELECT</span>
+        </div>
+        <div className="rr-control-hint no-border">
+          <div className="rr-key white" />
+          <span className="rr-control-label">UP/DOWN</span>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@600;700&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+body { margin:0; background:#15110f; }
+a { color:#e0671f; text-decoration:none; }
+a:hover { color:#f0902f; }
+@keyframes fall { from { top:-120px; } to { top:900px; } }
+@keyframes pulse { 0%,100% { opacity:.55; transform:scale(1); } 50% { opacity:1; transform:scale(1.06); } }
+</style>
+</helmet>
+
+<div style="display:flex; flex-direction:column; gap:64px; padding:56px; font-family:'Barlow Condensed',sans-serif;">
+
+  <div>
+    <div style="font-family:'Space Mono',monospace; font-size:13px; letter-spacing:.22em; color:#8a7a68; margin-bottom:12px;">01 — MAIN MENU</div>
+    <div style="position:relative; width:1280px; height:720px; overflow:hidden; background:#241a15; box-shadow:0 24px 60px rgba(0,0,0,.6);">
+      <div style="position:absolute; inset:0; background:repeating-linear-gradient(118deg,#2b1f18 0 34px,#231913 34px 70px);"></div>
+      <div style="position:absolute; inset:0; background:radial-gradient(circle at 18% 22%,#4a3325 0 2px,transparent 2.5px) 0 0/16px 16px; opacity:.5;"></div>
+      <div style="position:absolute; left:-40px; top:120px; width:280px; height:300px; transform:rotate(-7deg); background:repeating-linear-gradient(45deg,#3b2a20 0 10px,#32241b 10px 20px); border:3px solid #191210; opacity:.9;"></div>
+      <div style="position:absolute; right:-30px; top:-30px; width:330px; height:340px; transform:rotate(6deg); background:repeating-linear-gradient(-30deg,#402d21 0 12px,#35251c 12px 24px); border:3px solid #191210; opacity:.85;"></div>
+      <div style="position:absolute; right:60px; bottom:90px; width:300px; height:200px; transform:rotate(-4deg); background:#c9bda4; border:3px solid #191210; opacity:.15;"></div>
+      <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 45%,transparent 30%,rgba(0,0,0,.72) 100%);"></div>
+
+      <div style="position:absolute; left:74px; top:96px; width:420px; transform:rotate(-2deg);">
+        <div style="background:#efe2c6; border:6px solid #17110e; padding:26px 22px 20px; box-shadow:10px 12px 0 rgba(0,0,0,.5);">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:82px; line-height:.82; letter-spacing:-.03em; color:#17110e; text-align:center;">RIFF</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:82px; line-height:.86; letter-spacing:-.03em; color:#c2481c; text-align:center;">RIOT</div>
+          <div style="height:5px; background:#17110e; margin:14px 0 10px;"></div>
+          <div style="font-family:'Barlow Semi-Condensed','Barlow Condensed',sans-serif; font-weight:700; font-size:22px; letter-spacing:.34em; text-align:center; color:#3c2b22;">CHAPTER THREE</div>
+        </div>
+        <div style="position:absolute; left:-34px; top:-18px; width:110px; height:34px; transform:rotate(-24deg); background:#b9b2a4; opacity:.75; box-shadow:0 2px 0 rgba(0,0,0,.3);"></div>
+        <div style="position:absolute; right:-30px; bottom:-16px; width:96px; height:30px; transform:rotate(-14deg); background:#b9b2a4; opacity:.7;"></div>
+      </div>
+
+      <div style="position:absolute; right:110px; top:104px; display:flex; flex-direction:column; align-items:flex-start; gap:2px;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:64px; line-height:1; color:#e8a33a; text-shadow:4px 4px 0 #17110e;">CAREER</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:32px; line-height:1.1; color:#cfc2a6; text-shadow:3px 3px 0 #17110e;">CO-OP CAREER</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:60px; line-height:1.04; color:#e8e0cc; text-shadow:4px 4px 0 #17110e;">QUICKPLAY</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:44px; line-height:1.08; color:#bdb19a; text-shadow:3px 3px 0 #17110e;">MULTIPLAYER</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:56px; line-height:1.06; color:#c2481c; text-shadow:4px 4px 0 #17110e;">TRAINING</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:40px; line-height:1.1; color:#cfc2a6; text-shadow:3px 3px 0 #17110e;">OPTIONS</div>
+      </div>
+
+      <div style="position:absolute; right:180px; bottom:190px; font-family:'Archivo Black',sans-serif; font-size:26px; color:#8e2b16; letter-spacing:.04em; transform:rotate(-1deg);">DEBUG MENU</div>
+
+      <div style="position:absolute; left:0; right:0; bottom:0; height:74px; background:linear-gradient(#0d0a09cc,#0d0a09); display:flex; align-items:center; justify-content:center; gap:44px;">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div style="width:26px; height:26px; border-radius:7px; background:#2f9e4a; border:3px solid #0d0a09; box-shadow:inset 0 -4px 0 rgba(0,0,0,.35);"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:24px; color:#efe6d2; letter-spacing:.06em;">SELECT</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div style="width:44px; height:20px; border-radius:10px; background:#cfc6b4; border:3px solid #0d0a09;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:24px; color:#efe6d2; letter-spacing:.06em;">UP/DOWN</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-family:'Space Mono',monospace; font-size:13px; letter-spacing:.22em; color:#8a7a68; margin-bottom:12px;">02 — SONG LIST</div>
+    <div style="position:relative; width:1280px; height:720px; overflow:hidden; background:#cfd6c6; box-shadow:0 24px 60px rgba(0,0,0,.6);">
+      <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 20% 25%,#e6ebdc 0 22%,transparent 60%),radial-gradient(ellipse at 75% 70%,#c3cdb8 0 24%,transparent 62%),radial-gradient(ellipse at 45% 90%,#dde3d1 0 20%,transparent 58%),linear-gradient(#dde2d2,#c4ccb9);"></div>
+      <div style="position:absolute; inset:0; background:repeating-linear-gradient(97deg,rgba(255,255,255,.14) 0 3px,transparent 3px 9px);"></div>
+      <div style="position:absolute; right:0; top:0; bottom:0; width:120px; background:repeating-linear-gradient(90deg,#4a3527 0 26px,#3b291e 26px 48px); border-left:5px solid #241912;"></div>
+
+      <div style="position:absolute; left:0; right:120px; top:0; bottom:74px; padding:18px 44px 0;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:26px; color:#7e8a75; letter-spacing:.02em; opacity:.8;">METEAT1</div>
+
+        <div style="padding:9px 14px; margin:2px 0; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Toymachine's Nightmare</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">PREB</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:24px; letter-spacing:.14em; color:#5a4a33;">★★★★★</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:22px; color:#7d8a92;">713.572</div>
+          </div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Tree Of Wat Quads</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">MRGREGMURPHY</div>
+          </div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Bonfire Circuit 125%</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">IRONMANE</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:24px; letter-spacing:.14em; color:#5a4a33;">★★★★★</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:22px; color:#7d8a92;">981.291</div>
+          </div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Bonfire Circuit 300BPM</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">IRONMANE</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:24px; letter-spacing:.14em; color:#5a4a33;">★★★★★</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:22px; color:#7d8a92;">682.488</div>
+          </div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0; background:linear-gradient(90deg,rgba(255,252,238,.92),rgba(255,252,238,.35)); border-top:2px solid rgba(255,255,255,.7); border-bottom:2px solid rgba(90,74,51,.25); display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:33px; color:#9a6a12;">Twisted Void</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">LEMONXREAPER</div>
+          </div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Uber Juice</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">SCHMUTZ06</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:24px; letter-spacing:.14em; color:#5a4a33;">★★★★★</div>
+            <div style="font-family:'Archivo Black',sans-serif; font-size:22px; color:#7d8a92;">1.099.225</div>
+          </div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Uro's Temple</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">VOID222X</div>
+        </div>
+
+        <div style="padding:9px 14px; margin:2px 0;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">Warden Speed-up : Madness March</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.1em; color:#6d8496;">ISTHATACRAFT7</div>
+        </div>
+
+        <div style="padding:2px 14px;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:31px; color:#2a2620;">What More Effort Sounds Like</div>
+        </div>
+      </div>
+
+      <div style="position:absolute; right:32px; bottom:112px; width:230px; height:230px; transform:rotate(-6deg); background:#141210; border:5px solid #0b0a09; border-radius:14px; box-shadow:-10px 10px 0 rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding:14px;">
+        <div style="width:100%; height:100%; border-radius:50%; background:repeating-linear-gradient(45deg,#2b2723 0 8px,#221f1c 8px 16px); display:flex; align-items:center; justify-content:center; border:3px solid #3a352f;">
+          <div style="font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.14em; color:#9a9086; text-align:center; line-height:1.5;">BAND<br>CREST<br>ART</div>
+        </div>
+      </div>
+
+      <div style="position:absolute; left:0; right:0; bottom:0; height:74px; background:linear-gradient(#0d0a09cc,#0d0a09); display:flex; align-items:center; justify-content:center; gap:18px;">
+        <div style="display:flex; align-items:center; gap:10px; padding:7px 18px; border:2px solid #4a423a; border-radius:999px; background:#1a1614;">
+          <div style="width:34px; height:15px; border-radius:8px; background:#cfc6b4;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:15px; color:#cfc6b4; letter-spacing:.06em;">BROWSE</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:7px 18px; border:2px solid #4a423a; border-radius:999px; background:#1a1614;">
+          <div style="width:17px; height:17px; border-radius:5px; background:#2f9e4a;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:15px; color:#cfc6b4; letter-spacing:.06em;">SELECT</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:7px 18px; border:2px solid #4a423a; border-radius:999px; background:#1a1614;">
+          <div style="width:17px; height:17px; border-radius:5px; background:#c23a2c;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:15px; color:#cfc6b4; letter-spacing:.06em;">BACK</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:7px 18px; border:2px solid #4a423a; border-radius:999px; background:#1a1614;">
+          <div style="width:17px; height:17px; border-radius:5px; background:#e0b21c;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:15px; color:#cfc6b4; letter-spacing:.06em;">SETLIST</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:7px 18px; border:2px solid #4a423a; border-radius:999px; background:#1a1614;">
+          <div style="width:17px; height:17px; border-radius:5px; background:#e07a1c;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:15px; color:#cfc6b4; letter-spacing:.06em;">DOWNLOADS</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-family:'Space Mono',monospace; font-size:13px; letter-spacing:.22em; color:#8a7a68; margin-bottom:12px;">03 — SELECT DIFFICULTY</div>
+    <div style="position:relative; width:1280px; height:720px; overflow:hidden; background:#f2e6c6; box-shadow:0 24px 60px rgba(0,0,0,.6);">
+      <div style="position:absolute; left:0; top:0; bottom:0; width:140px; background:repeating-linear-gradient(28deg,#d9cdb4 0 18px,#cabd9f 18px 36px); opacity:.95;"></div>
+      <div style="position:absolute; right:0; top:0; bottom:0; width:210px; background:repeating-linear-gradient(-28deg,#d9cdb4 0 18px,#cabd9f 18px 36px); border-left:4px solid #6b5a46; opacity:.95;"></div>
+      <div style="position:absolute; left:18px; top:40px; width:150px; height:190px; transform:rotate(-5deg); background:#c7b899; border:4px solid #5c4c3a; display:flex; align-items:center; justify-content:center;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:44px; color:#5c4c3a; opacity:.7;">GLAM</div>
+      </div>
+      <div style="position:absolute; left:26px; bottom:120px; width:140px; height:150px; transform:rotate(4deg); background:#bfae8d; border:4px solid #5c4c3a;"></div>
+      <div style="position:absolute; right:26px; top:60px; width:160px; height:180px; transform:rotate(5deg); background:#c7b899; border:4px solid #5c4c3a;"></div>
+      <div style="position:absolute; right:40px; bottom:150px; font-family:'Archivo Black',sans-serif; font-size:40px; color:#6b5a46; transform:rotate(-8deg);">ROCK</div>
+      <div style="position:absolute; left:120px; top:20px; width:150px; height:46px; transform:rotate(-16deg); background:#b9b2a4; opacity:.85;"></div>
+      <div style="position:absolute; left:60px; bottom:60px; width:130px; height:44px; transform:rotate(12deg); background:#b9b2a4; opacity:.85;"></div>
+      <div style="position:absolute; right:150px; top:150px; width:120px; height:42px; transform:rotate(22deg); background:#b9b2a4; opacity:.8;"></div>
+
+      <div style="position:absolute; left:168px; top:238px; display:flex; flex-direction:column; gap:6px; z-index:3;">
+        <div style="padding:2px 26px;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:52px; line-height:.96; color:#2c2118;">EASY</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.06em; color:#6b5a46; padding-left:4px;">0 OF 42 SONGS</div>
+        </div>
+        <div style="padding:6px 60px 8px 26px; background:#d9691f; box-shadow:0 0 0 3px #b5511420;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:52px; line-height:.96; color:#221a12;">MEDIUM</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.06em; color:#3a2a18; padding-left:4px;">10 OF 42 SONGS</div>
+        </div>
+        <div style="padding:2px 26px;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:52px; line-height:.96; color:#2c2118;">HARD</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.06em; color:#6b5a46; padding-left:4px;">0 OF 42 SONGS</div>
+        </div>
+        <div style="padding:2px 26px;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:52px; line-height:.96; color:#2c2118;">EXPERT</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:17px; letter-spacing:.06em; color:#6b5a46; padding-left:4px;">0 OF 42 SONGS</div>
+        </div>
+      </div>
+
+      <div style="position:absolute; left:610px; top:52px; width:430px; height:530px; background:#d9691f; border:5px solid #6b2d0d; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:26px 22px; box-shadow:12px 14px 0 rgba(0,0,0,.18);">
+        <div style="width:100%; flex:1; background:repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 10px,transparent 10px 20px); border:3px dashed rgba(255,255,255,.45); display:flex; align-items:center; justify-content:center;">
+          <div style="font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.16em; color:#4a1d07; text-align:center; line-height:1.7;">DIFFICULTY<br>POSTER ART</div>
+        </div>
+        <div style="margin-top:22px; text-align:center;">
+          <div style="font-family:'Archivo Black',sans-serif; font-size:44px; line-height:.92; color:#2c1204;">SELECT</div>
+          <div style="font-family:'Archivo Black',sans-serif; font-size:30px; letter-spacing:.06em; color:#2c1204;">DIFFICULTY</div>
+        </div>
+      </div>
+
+      <div style="position:absolute; left:0; right:0; bottom:0; height:74px; background:linear-gradient(#0d0a09cc,#0d0a09); display:flex; align-items:center; justify-content:center; gap:26px;">
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 24px; border-radius:999px; background:#1a1614; border:2px solid #4a423a;">
+          <div style="width:18px; height:18px; border-radius:5px; background:#2f9e4a;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:19px; color:#efe6d2; letter-spacing:.06em;">SELECT</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 24px; border-radius:999px; background:#1a1614; border:2px solid #4a423a;">
+          <div style="width:18px; height:18px; border-radius:5px; background:#c23a2c;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:19px; color:#efe6d2; letter-spacing:.06em;">BACK</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 24px; border-radius:999px; background:#1a1614; border:2px solid #4a423a;">
+          <div style="width:36px; height:16px; border-radius:8px; background:#cfc6b4;"></div>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:19px; color:#efe6d2; letter-spacing:.06em;">UP/DOWN</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-family:'Space Mono',monospace; font-size:13px; letter-spacing:.22em; color:#8a7a68; margin-bottom:12px;">04 — GAMEPLAY</div>
+    <div style="position:relative; width:1280px; height:720px; overflow:hidden; background:#0b1412; box-shadow:0 24px 60px rgba(0,0,0,.6);">
+      <div style="position:absolute; inset:0; background:radial-gradient(ellipse at 50% 12%,#4a2a3c 0 26%,transparent 62%),radial-gradient(ellipse at 14% 6%,#7a4a2a 0 14%,transparent 48%),radial-gradient(ellipse at 86% 6%,#2a4a7a 0 14%,transparent 48%),linear-gradient(#1a1018,#070b0a 70%);"></div>
+      <div style="position:absolute; left:80px; top:26px; width:110px; height:110px; border-radius:50%; background:repeating-linear-gradient(0deg,#d8d2c4 0 10px,#8e887a 10px 20px); opacity:.5;"></div>
+      <div style="position:absolute; right:110px; top:40px; width:90px; height:90px; border-radius:50%; background:repeating-linear-gradient(0deg,#d8d2c4 0 9px,#8e887a 9px 18px); opacity:.4;"></div>
+
+      <div style="position:absolute; left:50%; top:110px; bottom:0; transform:translateX(-50%); width:760px; perspective:1300px; perspective-origin:50% 100%;">
+        <div style="position:absolute; left:50%; bottom:0; width:520px; height:1000px; margin-left:-260px; transform-origin:50% 100%; transform:rotateX(48deg); background:linear-gradient(#071b18,#0d3a32 55%,#114a40); box-shadow:0 0 90px rgba(0,0,0,.8) inset; overflow:hidden;">
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent 0 102px,rgba(190,230,220,.55) 102px 106px);"></div>
+          <div style="position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0 200px,rgba(190,230,220,.18) 200px 206px);"></div>
+          <div style="position:absolute; left:0; right:0; bottom:146px; height:8px; background:#c9312c; box-shadow:0 0 22px #c9312c;"></div>
+          {{ notes }}
+          <div style="position:absolute; left:0; right:0; bottom:100px; display:flex;">
+            <div style="flex:1; display:flex; justify-content:center;"><div style="width:86px; height:86px; border-radius:50%; background:radial-gradient(circle at 40% 35%,#6ee06e,#2b8c2b); border:8px solid #0b1210; box-shadow:0 0 26px #3fa93f;"></div></div>
+            <div style="flex:1; display:flex; justify-content:center;"><div style="width:86px; height:86px; border-radius:50%; background:radial-gradient(circle at 40% 35%,#f06a62,#9b241f); border:8px solid #0b1210; box-shadow:0 0 26px #c9312c;"></div></div>
+            <div style="flex:1; display:flex; justify-content:center;"><div style="width:86px; height:86px; border-radius:50%; background:radial-gradient(circle at 40% 35%,#f5d968,#b0860f); border:8px solid #0b1210; box-shadow:0 0 26px #e0b21c;"></div></div>
+            <div style="flex:1; display:flex; justify-content:center;"><div style="width:86px; height:86px; border-radius:50%; background:radial-gradient(circle at 40% 35%,#6ea8ef,#204f87); border:8px solid #0b1210; box-shadow:0 0 26px #2f6fb5;"></div></div>
+            <div style="flex:1; display:flex; justify-content:center;"><div style="width:86px; height:86px; border-radius:50%; background:radial-gradient(circle at 40% 35%,#f5a95c,#a1530d); border:8px solid #0b1210; box-shadow:0 0 26px #e07a1c;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:absolute; left:34px; top:32px; display:flex; flex-direction:column; gap:10px;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:15px; letter-spacing:.2em; color:#9fb7ae;">SCORE</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:50px; line-height:.9; color:#f2ead6; text-shadow:3px 3px 0 #0a0d0c;">148.320</div>
+        <div style="display:flex; align-items:baseline; gap:8px;">
+          <span style="font-family:'Archivo Black',sans-serif; font-size:34px; color:#e8a33a; text-shadow:3px 3px 0 #0a0d0c;">4x</span>
+          <span style="font-family:'Archivo Black',sans-serif; font-size:16px; letter-spacing:.16em; color:#9fb7ae;">MULTIPLIER</span>
+        </div>
+        <div style="margin-top:6px; width:210px; height:16px; background:#0d1614; border:3px solid #2b3a35;">
+          <div style="width:72%; height:100%; background:linear-gradient(90deg,#e0b21c,#e07a1c);"></div>
+        </div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:.18em; color:#8fa39b;">STAR POWER</div>
+      </div>
+
+      <div style="position:absolute; right:40px; top:120px; display:flex; flex-direction:column; align-items:center; gap:12px;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:14px; letter-spacing:.18em; color:#9fb7ae;">ROCK</div>
+        <div style="width:30px; height:330px; background:linear-gradient(#c9312c 0 28%,#e0b21c 28% 58%,#3fa93f 58% 100%); border:4px solid #0d1614; position:relative; box-shadow:0 0 20px rgba(0,0,0,.6);">
+          <div style="position:absolute; left:-12px; right:-12px; top:26%; height:6px; background:#f2ead6; box-shadow:0 0 12px #f2ead6;"></div>
+        </div>
+      </div>
+
+      <div style="position:absolute; left:34px; bottom:34px; padding:12px 20px; background:rgba(8,12,11,.78); border:3px solid #2b3a35;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:24px; color:#f2ead6;">Twisted Void</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:14px; letter-spacing:.14em; color:#8fa39b;">LEMONXREAPER — MEDIUM</div>
+      </div>
+
+      <div style="position:absolute; right:40px; bottom:34px; text-align:right;">
+        <div style="font-family:'Archivo Black',sans-serif; font-size:40px; color:#f2ead6; line-height:.9; text-shadow:3px 3px 0 #0a0d0c;">182</div>
+        <div style="font-family:'Archivo Black',sans-serif; font-size:14px; letter-spacing:.18em; color:#8fa39b;">NOTE STREAK</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;noteSpeed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0.4,&quot;max&quot;:2,&quot;step&quot;:0.1,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Gameplay&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const colors = ['#3fa93f','#c9312c','#e0b21c','#2f6fb5','#e07a1c'];
+    const speed = this.props.noteSpeed ?? 1;
+    const dur = 3.2 / speed;
+    const lanes = [0,2,4,1,3,2,0,1,3,4,2,1,0,3,4,2,3,1,4,0,2,3];
+    const notes = lanes.map((lane, i) => {
+      const isHopo = i % 7 === 3;
+      return React.createElement('div', {
+        key: i,
+        style: {
+          position: 'absolute',
+          left: lane * 104 + 11,
+          width: 82,
+          height: 48,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle at 40% 30%, #ffffff55, ' + colors[lane] + ')',
+          border: (isHopo ? '5px' : '8px') + ' solid #0b1210',
+          boxShadow: '0 0 20px ' + colors[lane],
+          animation: 'fall ' + dur + 's linear ' + (i * (dur / 9)).toFixed(2) + 's infinite'
+        }
+      });
+    });
+    return { notes };
+  }
+}
+</script>
+</body>
+</html>

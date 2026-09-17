@@ -1,4 +1,4 @@
-import { AudioEngine, stemForInstrument } from './AudioEngine'
+import { AudioEngine } from './AudioEngine'
 import { lookAheadFor } from './config'
 import { HighwayRenderer } from './HighwayRenderer'
 import { IntroSequence } from './IntroSequence'
@@ -43,8 +43,7 @@ export class GameEngine {
   private sessions: PlayerSession[] = []
   private beats: number[] = []
 
-  /** Stem do instrumento escolhido, quando a musica separa as faixas. */
-  private instrumentStem: string | null = null
+  /** True enquanto o instrumento do jogador estiver cortado por erro. */
   private stemMuted = false
 
   private rafId = 0
@@ -81,17 +80,19 @@ export class GameEngine {
 
   async load(): Promise<void> {
     await this.audio.unlock()
-    const tasks: Promise<unknown>[] = [
-      this.audio.load(this.options.audio, this.options.onLoadProgress),
-    ]
-    if (this.options.videoUrl) {
-      tasks.push(this.video.load(this.options.videoUrl))
-    }
-    await Promise.all(tasks)
+    // O video carrega em paralelo; o audio e sequencial por dentro, para nao
+    // estourar a memoria com varios stems descomprimidos ao mesmo tempo.
+    const video = this.options.videoUrl
+      ? this.video.load(this.options.videoUrl)
+      : Promise.resolve()
 
-    // Descobre qual faixa corresponde ao instrumento escolhido, para poder
-    // cortar o som dele quando o jogador errar.
-    this.instrumentStem = stemForInstrument(this.options.chart.instrument, this.audio.stemNames)
+    await this.audio.load(
+      this.options.audio,
+      this.options.chart.instrument,
+      this.options.onLoadProgress,
+    )
+    await video
+
     this.intro.markLoaded()
   }
 
@@ -201,17 +202,19 @@ export class GameEngine {
    * proximo acerto. E o feedback mais direto que existe num jogo de ritmo.
    */
   private setInstrumentMuted(muted: boolean): void {
-    if (!this.instrumentStem) return
+    if (!this.audio.hasIsolatedInstrument) return
+
     if (!this.options.settings.gameplay.muteOnMiss) {
       if (this.stemMuted) {
         this.stemMuted = false
-        this.audio.setStemLevel(this.instrumentStem, 1)
+        this.audio.setInstrumentLevel(1)
       }
       return
     }
+
     if (this.stemMuted === muted) return
     this.stemMuted = muted
-    this.audio.setStemLevel(this.instrumentStem, muted ? 0 : 1)
+    this.audio.setInstrumentLevel(muted ? 0 : 1)
   }
 
   // ------------------------------------------------------------------ loop

@@ -5,6 +5,7 @@
     python main.py runserver --port 9000
     python main.py host                   backend + frontend na mesma origem (LAN)
     python main.py demo                   gera a musica de demonstracao
+    python main.py assets                 copia magazines/ para dentro do frontend
     python main.py build-index            gera o pacote da biblioteca para o CDN
     python main.py test                   roda os testes do backend
 """
@@ -66,6 +67,14 @@ def cmd_demo(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assets(_: argparse.Namespace) -> int:
+    from backend.app.tools.sync_decor import main as sync_main
+
+    sys.argv = ["assets"]
+    sync_main()
+    return 0
+
+
 def cmd_build_index(args: argparse.Namespace) -> int:
     from backend.app.tools.build_index import main as build_main
 
@@ -98,6 +107,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     demo = sub.add_parser("demo", help="gera a musica de demonstracao")
     demo.set_defaults(func=cmd_demo)
+
+    assets = sub.add_parser("assets", help="copia magazines/ para dentro do frontend")
+    assets.set_defaults(func=cmd_assets)
 
     index = sub.add_parser("build-index", help="gera o pacote da biblioteca para o CDN")
     index.add_argument("--out", type=Path, default=Path("dist-songs"))
