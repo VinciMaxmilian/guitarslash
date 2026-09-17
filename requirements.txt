@@ -1,0 +1,4 @@
+# Dependencias de runtime do backend (usadas tambem pela Vercel)
+fastapi==0.115.6
+mido==1.3.3
+uvicorn[standard]==0.34.0

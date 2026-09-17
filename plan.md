@@ -1,3 +1,28 @@
+==================================================
+PROJETO
+==================================================
+
+Nome: Guitar Slash
+
+Identidade visual e de marca 100% próprias.
+Guitar Slash NÃO é Guitar Hero e não deve usar nada proprietário.
+
+Pilares do produto:
+
+- Singleplayer;
+- Multiplayer LAN (co-op e versus, até 4 jogadores, rede local);
+- Configurações completas (teclas, cores das notas, nome, volume, calibração, etc);
+- Visual com a MESMA SENSAÇÃO de Guitar Hero 3, com arte 100% própria.
+
+Deploy:
+
+- Backend (Python/FastAPI) na Vercel;
+- Frontend (Vite/React) no Netlify.
+
+==================================================
+BRIEFING ORIGINAL
+==================================================
+
 Quero criar do zero uma aplicação web de jogo musical/rhythm game inspirada na experiência visual e de gameplay de Guitar Hero 3.
 
 IMPORTANTE:
@@ -63,7 +88,7 @@ A aplicação deverá ser preparada futuramente para:
 - editor de charts;
 - contas;
 - rankings;
-- multiplayer;
+- multiplayer online;
 - biblioteca online;
 - diferentes formatos de charts.
 
@@ -91,8 +116,10 @@ Backend:
 
 Deploy:
 
-- Vercel
-- Netlify
+- Backend (FastAPI/Python) na Vercel
+- Frontend (Vite/React) no Netlify
+
+Detalhes na seção DEPLOY.
 
 Banco:
 
@@ -1128,7 +1155,30 @@ O primeiro milestone funcional deve ser:
 
 Depois do MVP:
 
-FASE 2:
+FASE 2 - CONFIGURAÇÕES E PERFIS:
+- tela de settings;
+- remapeamento de teclas;
+- cores das notas por lane;
+- volumes separados;
+- note speed;
+- calibração de áudio/vídeo;
+- perfis de jogador;
+- persistência local.
+
+FASE 3 - MULTIPLAYER LAN:
+- modo host (servidor local na máquina de um dos jogadores);
+- lobby e entrada por IP;
+- protocolo WebSocket versionado;
+- distribuição dos assets da música pela LAN;
+- sincronização do start entre máquinas;
+- placar ao vivo dos oponentes;
+- modo co-op;
+- modo versus;
+- até 4 jogadores;
+- tratamento de desconexão;
+- tela de resultado comparativa.
+
+FASE 4 - INSTRUMENTOS E CHART AVANÇADO:
 - stems;
 - HOPO;
 - tap notes;
@@ -1138,16 +1188,22 @@ FASE 2:
 - drums;
 - vocals.
 
-FASE 3:
+FASE 5:
 - editor de charts.
 
-FASE 4:
+FASE 6:
 - contas;
 - rankings;
-- biblioteca online.
+- biblioteca online;
+- sync de configurações na conta.
 
-FASE 5:
-- multiplayer.
+FASE 7:
+- multiplayer online.
+
+Justificativa da ordem:
+as configurações vêm antes do multiplayer LAN porque o LAN depende de
+perfis (o nome que aparece para os outros jogadores) e principalmente
+de calibração, já que cada máquina tem latência própria.
 
 ==================================================
 RESULTADO ESPERADO
@@ -1158,6 +1214,8 @@ Quero que o projeto tenha sensação de um jogo musical completo, e não de uma 
 A gameplay deve ser o foco.
 
 O fluxo final deve ser:
+
+SOLO:
 
 MENU
  ↓
@@ -1177,6 +1235,34 @@ RESULT
  ↓
 SONG SELECT
 
+LAN:
+
+MENU
+ ↓
+MULTIPLAYER LAN
+ ↓
+HOST ou JOIN
+ ↓
+LOBBY  (modo, jogadores, ready)
+ ↓
+SONG SELECT  (o host escolhe)
+ ↓
+INSTRUMENT + DIFFICULTY  (cada jogador escolhe o seu)
+ ↓
+LOADING  (clientes baixam os assets do host)
+ ↓
+START SINCRONIZADO
+ ↓
+INTRO
+ ↓
+HIGHWAY + VIDEO + AUDIO  (tela cheia, uma por máquina)
+ ↓
+GAMEPLAY  (+ placar dos oponentes em overlay)
+ ↓
+RESULT  (comparativo)
+ ↓
+LOBBY
+
 O projeto deve ser modular, performático e preparado para crescer.
 
 Antes de implementar:
@@ -1191,3 +1277,600 @@ Antes de implementar:
 Não criar tudo de uma vez se isso aumentar risco.
 
 Construir primeiro o MVP funcional e testável.
+
+==================================================
+DIREÇÃO DE ARTE
+==================================================
+
+Referência de sensação: Guitar Hero 3.
+Referência de conteúdo: nenhuma. Toda a arte é própria.
+
+Isto é um pilar do produto, não um detalhe de acabamento.
+O jogo tem que PARECER um jogo de console dos anos 2000, e não uma
+página web com notas caindo.
+
+O QUE IMITAR (linguagem visual)
+
+- colagem ilustrada, estilo pôster de show e tattoo flash;
+- traço desenhado à mão, com contorno grosso;
+- paleta QUENTE e suja: ferrugem, âmbar, ouro velho, osso, carvão;
+  nada de neon frio como paleta principal;
+- textura de papel envelhecido, tinta descascada, grunge;
+- tipografia display pesada e condensada, com contorno e tratamento
+  metálico/desgastado, levemente inclinada;
+- menu vertical alinhado à esquerda, com TAMANHOS DIFERENTES por item:
+  a hierarquia é feita pelo tamanho da fonte, não por caixinhas;
+- molduras ornamentadas nas bordas da tela, emoldurando o conteúdo;
+- iluminação dramática de palco por trás de tudo;
+- rodapé com as dicas de controle, estilo console.
+
+O QUE NUNCA COPIAR
+
+- o logo de Guitar Hero;
+- as ilustrações, personagens e mascotes;
+- as fontes proprietárias;
+- screenshots, texturas ou qualquer asset extraído;
+- a composição exata de qualquer tela do jogo.
+
+A regra é simples: alguém que jogou GH3 tem que sentir a mesma vibe,
+e um advogado tem que olhar e não achar nada de lá.
+
+APLICAÇÃO POR TELA
+
+MENU
+- fundo ilustrado em colagem, com vinheta escura;
+- logo Guitar Slash grande, desgastado, à esquerda;
+- lista vertical de opções à direita, tamanhos variados;
+- rodapé com as teclas.
+
+SONG SELECT
+- lista com textura de papel;
+- capa em destaque, emoldurada;
+- metadados em tipografia de cartaz.
+
+GAMEPLAY
+- a highway continua sendo o elemento mais legível da tela;
+- a moldura ornamentada NÃO pode competir com a leitura das notas;
+- HUD com números pesados e desgastados;
+- star power aquece a cena inteira.
+
+RESULTADO
+- tela de cartaz: estrelas grandes, score enorme, textura de papel.
+
+RESTRIÇÃO PRÁTICA
+
+Enquanto não houver ilustração própria produzida, a estética é construída
+com CSS: gradientes quentes, ruído, vinheta, molduras geométricas e
+tipografia. A troca por ilustração própria depois não deve exigir
+reescrever as telas - apenas trocar as camadas de fundo e as molduras.
+
+==================================================
+MODOS DE JOGO
+==================================================
+
+SOLO
+- 1 jogador;
+- 1 máquina;
+- fluxo padrão do MVP.
+
+CO-OP LAN
+- 2 a 4 jogadores, cada um na sua máquina, na mesma rede local;
+- mesma música;
+- cada jogador em um instrumento, quando o chart tiver mais de um;
+- pontuação somada = BAND SCORE;
+- objetivo: tocar a música juntos.
+
+VERSUS LAN
+- 2 a 4 jogadores, cada um na sua máquina, na mesma rede local;
+- mesma música;
+- vence quem fizer mais pontos;
+- placar comparativo ao vivo.
+
+NÃO existe multiplayer na mesma máquina.
+Não há tela dividida, não há duas highways na mesma tela,
+não há dois jogadores no mesmo teclado.
+
+Cada jogador tem a própria máquina, a própria tela, o próprio teclado
+e o próprio áudio.
+
+==================================================
+MULTIPLAYER LAN
+==================================================
+
+Máximo: 4 jogadores.
+Rede local. Sem servidor na internet. Sem conta. Sem matchmaking.
+
+Por que não passa pela Vercel:
+
+- Serverless Function não mantém conexão WebSocket aberta;
+- uma partida precisa de estado vivo e de broadcast;
+- e uma página servida por HTTPS não pode abrir ws:// para um IP da LAN
+  (mixed content bloqueado pelo navegador).
+
+Solução adotada: MODO HOST.
+
+Um dos jogadores roda o backend na própria máquina.
+Esse processo serve o frontend, a API, os assets da música e o WebSocket
+da partida, tudo na mesma origem.
+Os outros jogadores só abrem o IP do host no navegador.
+
+Netlify e Vercel continuam existindo para o singleplayer e para a
+biblioteca pública. O multiplayer LAN não depende deles.
+
+==================================================
+MODO HOST
+==================================================
+
+O host roda o mesmo app FastAPI do backend, em modo host.
+
+Exemplo:
+
+    guitarslash host --port 8000
+
+O processo do host serve:
+
+- o SPA já buildado (arquivos estáticos);
+- a API de músicas, lendo songs/ da máquina do host;
+- os arquivos de áudio, vídeo, capa e notes.mid;
+- o WebSocket da partida;
+- a página de lobby.
+
+Consequências boas dessa escolha:
+
+- origem única: sem CORS, sem mixed content, sem certificado;
+- os clientes não instalam nada, só abrem o navegador;
+- funciona 100% offline;
+- latência de rede local;
+- o mesmo código de backend serve produção e modo host.
+
+Descoberta do host:
+
+- a tela do host exibe o IP e a porta em tamanho grande;
+- exibir também um QR code com a URL;
+- mDNS (guitarslash.local) é conveniência opcional, nunca dependência,
+  porque o suporte varia por sistema operacional;
+- documentar que o firewall vai pedir autorização na primeira execução.
+
+O host normalmente também joga.
+Permitir host sem jogar (host dedicado ou espectador) já na arquitetura,
+mesmo que a interface só apareça depois.
+
+Distribuição:
+o artefato do modo host é backend + frontend/dist empacotados juntos.
+
+Detecção de modo no frontend:
+se o SPA não estiver sendo servido pelo domínio público, ele está em
+modo host e habilita a interface de LAN.
+O frontend nunca hardcoda a URL da API: usa a própria origem.
+
+==================================================
+SINCRONIZAÇÃO EM REDE
+==================================================
+
+REGRA CENTRAL:
+
+Cada cliente tem o próprio AudioEngine e é a autoridade absoluta sobre
+o julgamento das próprias notas.
+
+Não existe lockstep.
+Não existe estado de nota compartilhado.
+Não existe rollback.
+A sincronização áudio-nota NUNCA depende da rede.
+
+A rede transporta apenas:
+
+- estado da sala e do lobby;
+- comando de início com timestamp;
+- score, combo, multiplicador e accuracy, em baixa frequência;
+- eventos raros: star power ativado, jogador terminou, jogador caiu.
+
+Se a rede engasgar, o jogo do jogador continua perfeito.
+Só o placar dos oponentes fica desatualizado por alguns instantes.
+
+START SINCRONIZADO
+
+1. handshake de relógio estilo NTP: N pares ping/pong, guardar a mediana
+   do offset e do RTT;
+2. o host envia START_AT com um instante futuro no relógio dele,
+   tipicamente agora + 3 segundos;
+3. cada cliente converte esse instante para o próprio relógio;
+4. cada cliente inicia áudio, vídeo e intro nesse instante.
+
+Um desvio de 50 a 100 ms entre máquinas é aceitável, porque ninguém é
+julgado contra o áudio do outro.
+
+ATENÇÃO - jogadores na mesma sala física:
+
+Se duas máquinas tocam a mesma música alto na mesma sala, qualquer desvio
+vira eco audível. Mitigação: recomendar fones, ou deixar só o host com o
+áudio alto. Documentar isso na interface do lobby.
+
+FREQUÊNCIA DE REDE
+
+- score broadcast entre 5 e 10 Hz, nunca a cada frame;
+- enviar diffs, não o estado completo;
+- o host agrega tudo e faz um único broadcast para todos;
+- o placar da tela interpola entre atualizações para não ficar travado.
+
+==================================================
+DISTRIBUIÇÃO DE ASSETS NA LAN
+==================================================
+
+Só o host precisa ter a música.
+
+Ao selecionar a música no lobby:
+
+1. o host publica o manifesto da música: arquivos, tamanhos e hashes;
+2. cada cliente verifica o que já tem em cache;
+3. cada cliente baixa do host o que falta;
+4. o lobby mostra o progresso de download de cada jogador;
+5. a partida só começa quando todos estiverem prontos, com timeout
+   e aviso de quem está travando.
+
+Detalhes:
+
+- o host serve os arquivos por HTTP normal, com suporte a Range requests;
+- cachear no cliente por hash (Cache Storage API), para não rebaixar
+  a mesma música na próxima partida;
+- o vídeo de fundo é de longe o arquivo mais pesado: permitir que o
+  cliente desabilite o vídeo e entre na partida sem baixá-lo;
+- o chart e o áudio são obrigatórios; o vídeo e a capa são opcionais;
+- validar o hash do notes.mid: todos precisam jogar exatamente o mesmo chart.
+
+==================================================
+PROTOCOLO
+==================================================
+
+WebSocket, mensagens JSON tipadas, com campo de versão.
+Cliente com versão de protocolo diferente é recusado com mensagem clara.
+
+Cliente -> Host:
+
+JOIN               nome, versão do protocolo
+SET_INSTRUMENT     instrumento escolhido
+SET_DIFFICULTY     dificuldade escolhida
+SET_READY          pronto / não pronto
+LOAD_PROGRESS      progresso do download dos assets
+SCORE_UPDATE       score, combo, multiplicador, accuracy, notas
+STAR_POWER         ativou star power
+FINISHED           resultado final do jogador
+LEAVE              saiu
+PING               sincronização de relógio
+
+Host -> Cliente:
+
+ROOM_STATE         estado completo da sala
+PLAYER_JOINED      novo jogador
+PLAYER_LEFT        jogador saiu ou caiu
+MODE_CHANGED       co-op ou versus
+SONG_SELECTED      música + manifesto de assets
+LOADING_STATE      progresso de todos os jogadores
+START_AT           timestamp de início
+SCOREBOARD         placar agregado
+RESULTS            resultado final consolidado
+ERROR              erro com código e mensagem
+PONG               sincronização de relógio
+
+O estado da sala é do host. O host é a fonte da verdade do lobby.
+Durante a música, cada cliente é a fonte da verdade do próprio score.
+
+CONFIANÇA
+
+LAN entre amigos: confiar no cliente.
+Não implementar anti-cheat.
+Não gastar esforço validando score no host.
+
+==================================================
+DESCONEXÕES
+==================================================
+
+Cliente cai durante a música:
+- os outros continuam normalmente;
+- o jogador aparece como DISCONNECTED no placar;
+- o score dele congela no último valor recebido;
+- no co-op, o BAND SCORE continua somando os que ficaram.
+
+Cliente cai no lobby:
+- simplesmente sai da lista.
+
+Host cai:
+- a partida acaba, porque o host é o servidor;
+- os clientes mostram uma mensagem clara, não uma tela quebrada;
+- não tentar eleger novo host.
+
+Reconexão:
+- tentar reentrar na sala mantendo o nome e o score (fase posterior);
+- no MVP da FASE 3, reconectar volta para o lobby.
+
+Timeouts:
+- heartbeat por ping;
+- considerar caído após N segundos sem resposta;
+- valor configurável, porque LAN por wifi oscila.
+
+==================================================
+CO-OP
+==================================================
+
+Seleção:
+- cada jogador escolhe instrumento e dificuldade na própria máquina;
+- o lobby mostra quem escolheu o quê;
+- instrumentos já escolhidos aparecem marcados;
+- se o chart tiver menos instrumentos que jogadores, permitir instrumento
+  repetido (configurável, default: permitido).
+
+Pontuação:
+- cada jogador mantém combo, multiplicador e accuracy próprios;
+- o BAND SCORE é a soma dos scores individuais, agregada pelo host;
+- cada tela mostra o BAND SCORE em destaque e o próprio score ao lado.
+
+Star Power:
+- medidor individual;
+- ativação individual;
+- quando alguém ativa, os outros veem no overlay;
+- preparar bônus para ativação simultânea de 2+ jogadores,
+  sem obrigatoriedade de implementar já.
+
+Fail:
+- no MVP não há fail;
+- a arquitetura deve permitir "fail individual com resgate" depois.
+
+Resultado:
+- BAND SCORE em destaque;
+- quebra por jogador: score, accuracy, max combo, notas acertadas
+  e notas erradas.
+
+==================================================
+VERSUS
+==================================================
+
+Seleção:
+- default: todos no mesmo instrumento;
+- dificuldade independente por jogador;
+- permitir instrumentos diferentes como opção avançada, deixando claro
+  que a comparação fica desbalanceada.
+
+Regra de vitória:
+- vence quem tiver MAIS PONTOS ao final da música.
+
+Desempate, nesta ordem:
+1. accuracy;
+2. max combo;
+3. notas acertadas;
+4. empate declarado.
+
+Comparação:
+- o score bruto é sempre o valor oficial exibido;
+- dificuldades diferentes geram scores não comparáveis: avisar na tela;
+- deixar espaço para um "modo justo" com normalização no futuro,
+  sem implementar agora.
+
+Resultado:
+- ranking do 1º ao 4º;
+- vencedor em destaque;
+- tabela comparativa com todas as métricas;
+- jogadores desconectados listados à parte.
+
+==================================================
+HUD DE OPONENTES
+==================================================
+
+Cada jogador vê a própria highway em TELA CHEIA.
+A presença dos oponentes é um overlay compacto, nunca uma segunda highway.
+
+O overlay mostra, por oponente:
+
+- nome;
+- score;
+- combo atual;
+- star power ativo;
+- estado (tocando, terminou, desconectado).
+
+CO-OP:
+
+┌─────────────────────────────────────────────┐
+│ SCORE 125430   x24        ★ STAR POWER      │
+│                                             │
+│   BAND  412.980           HIGHWAY           │
+│   ─────────────                             │
+│   Você    125.430            🟢             │
+│   Ana     158.220              🔴           │
+│   Léo     129.330                🟡         │
+│                                             │
+│              ═══════════════                │
+│ ACCURACY 97%                 02:34 / 04:12  │
+└─────────────────────────────────────────────┘
+
+VERSUS:
+
+┌─────────────────────────────────────────────┐
+│ SCORE 125430   x24        ★ STAR POWER      │
+│                                             │
+│   1º Ana    158.220       HIGHWAY           │
+│   2º Você   125.430   -32.790                │
+│   3º Léo    129.330          🟢             │
+│                                🔴           │
+│                                             │
+│              ═══════════════                │
+│ ACCURACY 97%                 02:34 / 04:12  │
+└─────────────────────────────────────────────┘
+
+Regras:
+
+- o overlay não pode competir com a leitura das notas;
+- deve ser possível reduzir ou esconder o overlay nas configurações;
+- animar a mudança de posição no versus, mas sem chamar mais atenção
+  que a highway;
+- no versus, destacar a diferença para o líder.
+
+==================================================
+CONFIGURAÇÕES
+==================================================
+
+Tela SETTINGS acessível pelo menu principal e pela pausa.
+Aplicar as alterações imediatamente sempre que possível.
+
+GAMEPLAY
+- note speed / scroll speed;
+- posição da hit line;
+- lefty flip (inverter a ordem das lanes);
+- hit sounds on/off e volume;
+- mostrar FPS;
+- mostrar contadores de timing;
+- janelas de timing (avançado, com opção de restaurar o padrão).
+
+CONTROLES
+- remapear as 5 fret keys;
+- remapear o strum;
+- teclas de pause e star power;
+- teste de input ao vivo;
+- detecção de teclas duplicadas dentro do próprio mapeamento.
+
+Cada máquina tem um jogador, então não há disputa de teclado
+nem problema de ghosting entre jogadores.
+
+VISUAL
+- cor de cada lane: 5 cores personalizáveis, com presets;
+- preset para daltonismo;
+- tema da highway;
+- opacidade e brilho do vídeo de fundo;
+- nível de efeitos: baixo, médio ou alto;
+- HUD compacto.
+
+ÁUDIO
+- volume master;
+- volume da música;
+- volume dos stems, quando existirem;
+- volume dos efeitos;
+- volume do vídeo de fundo;
+- volume do preview na seleção de música.
+
+PERFIL
+- nome do jogador;
+- cor de identificação;
+- avatar (opcional, futuro).
+
+CALIBRAÇÃO
+- audio offset em ms;
+- video offset em ms;
+- wizard de calibração.
+
+Implementação:
+
+- um único SettingsStore tipado, com defaults, validação e reset;
+- schema versionado, com migração ao carregar versões antigas;
+- persistência em localStorage no MVP;
+- a engine NÃO lê o localStorage: o SettingsStore deriva um GAME_CONFIG
+  que é injetado na engine;
+- alterações em tempo real notificam a engine por callback, e não por
+  re-render do React.
+
+==================================================
+CALIBRAÇÃO
+==================================================
+
+A latência de áudio no navegador é real e varia por dispositivo,
+sistema operacional e, principalmente, fones bluetooth.
+Sem calibração, o jogo "parece" fora do ritmo mesmo estando correto.
+
+Aplicação dos offsets:
+
+tempoEfetivo = AudioEngine.currentTime + audioOffset
+
+O offset de áudio é por máquina e por perfil, porque hardware, sistema
+operacional, fones e percepção variam entre os jogadores.
+
+Em LAN isso é ainda mais importante: cada jogador calibra a própria
+máquina, e o resultado não afeta ninguém mais, porque cada cliente
+julga as próprias notas contra o próprio áudio.
+
+O offset de vídeo é global e aplicado pela VideoEngine ao sincronizar
+o currentTime com o AudioEngine.
+
+Wizard de calibração:
+
+1. tocar um metrônomo estável;
+2. o jogador bate na tecla no ritmo;
+3. coletar N acertos;
+4. calcular a mediana do erro (mediana, não média, para ignorar outliers);
+5. sugerir o offset;
+6. permitir aceitar ou ajustar manualmente.
+
+==================================================
+PERFIS DE JOGADOR
+==================================================
+
+Perfil = nome + cores das notas + keybinds + offset + preferências.
+
+- um perfil ativo por máquina;
+- permitir vários perfis salvos na mesma máquina e troca rápida;
+- perfis salvos localmente, no navegador;
+- o nome do perfil é o nome exibido para os outros jogadores na LAN;
+- criar, renomear e apagar perfil;
+- preparar para sincronizar com conta em fase futura,
+  sem implementar login agora.
+
+==================================================
+DEPLOY
+==================================================
+
+FRONTEND - NETLIFY
+
+- build com Vite;
+- publish: frontend/dist;
+- netlify.toml versionado no repositório;
+- redirect de SPA: /* -> /index.html 200;
+- variável de ambiente VITE_API_URL apontando para o backend na Vercel;
+- em desenvolvimento, VITE_API_URL aponta para o backend local.
+
+BACKEND - VERCEL
+
+- FastAPI rodando como Python Serverless Function;
+- entrypoint exportando o app ASGI;
+- vercel.json com rewrites para /api/*;
+- requirements.txt no backend;
+- versão do Python fixada;
+- CORS liberado para o domínio do Netlify e para localhost em dev.
+
+Restrições da Vercel que afetam a arquitetura:
+
+- o filesystem é efêmero e somente leitura fora de /tmp;
+- portanto a pasta songs/ NÃO existe em produção;
+- não colocar a biblioteca de músicas dentro da function;
+- há limite de tamanho de bundle e de tempo de execução;
+- cold start: o parse de MIDI precisa ser rápido;
+- cachear os charts já convertidos em memória e, depois, em storage/CDN.
+
+ASSETS EM PRODUÇÃO
+
+- áudios, vídeos, capas e notes.mid ficam em object storage/CDN;
+- o backend retorna URLs, e não bytes;
+- o storage precisa suportar CORS para o domínio do frontend;
+- o storage precisa suportar Range requests, senão o seek de áudio
+  e de vídeo não funciona.
+
+DESENVOLVIMENTO x PRODUÇÃO
+
+Local:
+- LocalSongStorage lê songs/;
+- o backend local serve os arquivos.
+
+Produção:
+- RemoteSongStorage aponta para o CDN;
+- mesma API, mesma resposta, só muda a origem das URLs.
+
+O código do frontend não deve saber a diferença.
+
+MODO HOST LAN
+
+O modo host não é um terceiro deploy: é o mesmo backend rodando na
+máquina de um jogador, servindo também o frontend já buildado.
+
+- não passa por Vercel nem por Netlify;
+- não precisa de internet;
+- não precisa de storage remoto: usa songs/ da máquina do host;
+- é o único caminho do multiplayer LAN, porque Serverless Function
+  não mantém WebSocket e página HTTPS não abre ws:// para IP local.
+
+Empacotamento:
+backend + frontend/dist distribuídos juntos, com um comando único
+para subir o host.

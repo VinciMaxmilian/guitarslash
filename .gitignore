@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# Biblioteca de musicas (conteudo do usuario, nunca versionado)
+songs/*
+!songs/README.md
+!songs/.gitkeep
+
+# Cache da biblioteca
+.cache/
+
+# Deploy
+.vercel/
+.netlify/
+
+# Editores / SO
+.DS_Store
+Thumbs.db
