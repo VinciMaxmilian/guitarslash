@@ -121,3 +121,105 @@ describe('ScoreEngine', () => {
     expect(snap).toMatchObject({ id: 0, name: 'Player 1', notesHit: 2, great: 2, combo: 1 })
   })
 })
+
+describe('ScoreEngine — medidor de desempenho', () => {
+  it('comeca no meio', () => {
+    expect(new ScoreEngine(0, 'Ana', 100).rockMeter).toBeCloseTo(0.5, 5)
+  })
+
+  it('sobe ao acertar', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    engine.registerHit('perfect', 1)
+    expect(engine.rockMeter).toBeGreaterThan(0.5)
+  })
+
+  it('cai ao errar', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    engine.registerMiss(1)
+    expect(engine.rockMeter).toBeLessThan(0.5)
+  })
+
+  it('errar pesa mais que acertar', () => {
+    const acerta = new ScoreEngine(0, 'Ana', 100)
+    acerta.registerHit('perfect', 1)
+    const erra = new ScoreEngine(0, 'Ana', 100)
+    erra.registerMiss(1)
+    expect(0.5 - erra.rockMeter).toBeGreaterThan(acerta.rockMeter - 0.5)
+  })
+
+  it('acorde move o medidor proporcionalmente as notas', () => {
+    const uma = new ScoreEngine(0, 'Ana', 100)
+    uma.registerHit('perfect', 1)
+    const tres = new ScoreEngine(0, 'Ana', 100)
+    tres.registerHit('perfect', 3)
+    expect(tres.rockMeter).toBeGreaterThan(uma.rockMeter)
+  })
+
+  it('palhetada no vazio derruba o medidor', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    engine.registerOverstrum()
+    expect(engine.rockMeter).toBeLessThan(0.5)
+  })
+
+  it('nao passa de 1 nem por muito acerto', () => {
+    const engine = new ScoreEngine(0, 'Ana', 500)
+    for (let i = 0; i < 400; i += 1) engine.registerHit('perfect', 1)
+    expect(engine.rockMeter).toBe(1)
+  })
+
+  it('nao fica negativo nem por muito erro', () => {
+    const engine = new ScoreEngine(0, 'Ana', 500)
+    for (let i = 0; i < 400; i += 1) engine.registerMiss(1)
+    expect(engine.rockMeter).toBe(0)
+  })
+
+  it('classifica a zona para a interface escolher a cor', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    expect(engine.rockZone).toBe('good')
+    engine.rockMeter = 0.4
+    expect(engine.rockZone).toBe('warning')
+    engine.rockMeter = 0.1
+    expect(engine.rockZone).toBe('danger')
+  })
+
+  it('vai para o snapshot', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    engine.registerMiss(1)
+    expect(engine.snapshot().rockMeter).toBe(engine.rockMeter)
+  })
+})
+
+describe('ScoreEngine — progresso do multiplicador', () => {
+  it('sem combo, o anel esta vazio', () => {
+    expect(new ScoreEngine(0, 'Ana', 100).comboToNextMultiplier).toBeCloseTo(0, 5)
+  })
+
+  it('preenche ate o primeiro degrau', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    for (let i = 0; i < 5; i += 1) engine.registerHit('perfect', 1)
+    // Primeiro degrau e 10; 5 de combo = metade.
+    expect(engine.comboToNextMultiplier).toBeCloseTo(0.5, 5)
+  })
+
+  it('reinicia o anel em cada degrau', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    for (let i = 0; i < 10; i += 1) engine.registerHit('perfect', 1)
+    expect(engine.multiplier).toBe(2)
+    expect(engine.comboToNextMultiplier).toBeCloseTo(0, 5)
+    for (let i = 0; i < 5; i += 1) engine.registerHit('perfect', 1)
+    expect(engine.comboToNextMultiplier).toBeCloseTo(0.5, 5)
+  })
+
+  it('no multiplicador maximo o anel fica cheio', () => {
+    const engine = new ScoreEngine(0, 'Ana', 200)
+    for (let i = 0; i < 60; i += 1) engine.registerHit('perfect', 1)
+    expect(engine.comboToNextMultiplier).toBe(1)
+  })
+
+  it('errar esvazia o anel junto com o combo', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    for (let i = 0; i < 8; i += 1) engine.registerHit('perfect', 1)
+    engine.registerMiss(1)
+    expect(engine.comboToNextMultiplier).toBeCloseTo(0, 5)
+  })
+})

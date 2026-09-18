@@ -20,6 +20,8 @@ function snapshot(overrides: Partial<PlayerSnapshot> = {}): PlayerSnapshot {
     starPowerEnergy: 0,
     starPowerActive: false,
     stars: 0,
+    rockMeter: 0.5,
+    comboToNextMultiplier: 0,
     ...overrides,
   }
 }

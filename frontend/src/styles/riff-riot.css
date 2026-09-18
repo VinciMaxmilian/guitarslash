@@ -465,3 +465,370 @@ button {
 }
 .rival-band-label { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #e0b21c; }
 .rival-band-score { font-family: 'Archivo Black', sans-serif; font-size: 26px; line-height: 1.05; color: #e0b21c; }
+
+
+/* ===================================== HUD ESTILO GUITAR HERO (referencia) */
+/* Moldura comum dos dois painEis: metal escuro com bisel e rebites. */
+.gh-panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(58, 52, 44, .96), rgba(22, 19, 16, .98));
+  border: 3px solid #0c0a08;
+  border-radius: 8px;
+  padding: 9px;
+  box-shadow:
+    inset 0 0 0 2px rgba(122, 112, 96, .55),
+    inset 0 2px 0 rgba(180, 170, 150, .3),
+    inset 0 -3px 8px rgba(0, 0, 0, .7),
+    0 7px 0 rgba(0, 0, 0, .4),
+    0 0 30px rgba(0, 0, 0, .55);
+}
+
+/* -------------------------------------------------- score + multiplicador */
+.gh-score-panel { width: clamp(132px, 13vw, 176px); display: flex; flex-direction: column; gap: 8px; }
+
+/* Visor dos digitos: fundo preto e grade fina, como um display de LED. */
+.gh-screen {
+  background: #050806;
+  border: 2px solid #0a0f0a;
+  border-radius: 3px;
+  padding: 5px 8px;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, .95), inset 0 0 26px rgba(40, 255, 90, .07);
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
+}
+.gh-digits {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: clamp(19px, 2.1vw, 27px);
+  line-height: 1.05;
+  letter-spacing: .06em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #46ff6e;
+  text-shadow: 0 0 6px rgba(70, 255, 110, .95), 0 0 18px rgba(70, 255, 110, .55);
+}
+
+/* Mostrador circular do multiplicador. */
+.gh-dial {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 32%, #2a2520, #0a0806 72%);
+  box-shadow: inset 0 3px 12px rgba(0, 0, 0, .9), 0 0 0 2px #0c0a08;
+}
+
+/* Anel de progresso do combo ate o proximo degrau. */
+.gh-dial-ring {
+  position: absolute;
+  inset: 5%;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--mult-cor) 0 var(--progresso, 0%),
+    rgba(255, 255, 255, .07) var(--progresso, 0%) 100%
+  );
+  /* Vira um anel: o miolo e recortado. */
+  mask: radial-gradient(circle, transparent 0 63%, #000 65% 100%);
+  -webkit-mask: radial-gradient(circle, transparent 0 63%, #000 65% 100%);
+  transition: background .1s linear;
+}
+
+.gh-dial-face {
+  position: relative;
+  width: 74%;
+  height: 74%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  background: radial-gradient(circle at 50% 30%, rgba(48, 40, 30, .95), rgba(10, 8, 5, .98));
+  box-shadow: inset 0 2px 9px rgba(0, 0, 0, .85);
+}
+.gh-dial-x {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: clamp(11px, 1.2vw, 16px);
+  color: rgba(236, 228, 207, .55);
+  margin-top: .45em;
+}
+.gh-dial-num {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: clamp(30px, 3.6vw, 50px);
+  line-height: 1;
+  color: var(--mult-cor);
+  text-shadow: 0 0 14px var(--mult-glow), 0 3px 0 rgba(0, 0, 0, .8);
+}
+
+/* A cor do multiplicador sobe de tom junto com o valor. */
+.gh-dial.mult-1 { --mult-cor: #cfc6b4; --mult-glow: rgba(207, 198, 180, .5); }
+.gh-dial.mult-2 { --mult-cor: #e0b21c; --mult-glow: rgba(224, 178, 28, .7); }
+.gh-dial.mult-3 { --mult-cor: #e07a1c; --mult-glow: rgba(224, 122, 28, .8); }
+.gh-dial.mult-4 { --mult-cor: #e8402a; --mult-glow: rgba(232, 64, 42, .9); }
+.gh-dial.mult-sp { --mult-cor: #8fe9ff; --mult-glow: rgba(143, 233, 255, .95); }
+.gh-dial.sp { box-shadow: inset 0 3px 12px rgba(0,0,0,.9), 0 0 0 2px #0c0a08, 0 0 26px rgba(143, 233, 255, .6); }
+
+.gh-combo {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-align: center;
+  color: rgba(236, 228, 207, .6);
+}
+
+/* ------------------------------------------------ medidor de desempenho */
+.gh-rock { width: clamp(126px, 12.5vw, 168px); }
+
+.gh-rock-arc {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 1.06;
+  overflow: hidden;
+  border-radius: 999px 999px 4px 4px;
+  background: #070a07;
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, .9);
+}
+
+/* Zonas do arco: vermelho -> amarelo -> verde, da esquerda para a direita. */
+.gh-rock-zones {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(
+    from -90deg at 50% 100%,
+    #8f1f14 0deg 34deg,
+    #c23a2c 34deg 62deg,
+    #d99a2b 62deg 92deg,
+    #6fbf3a 92deg 132deg,
+    #2f9e4a 132deg 180deg
+  );
+  mask: radial-gradient(circle at 50% 100%, transparent 0 34%, #000 36% 100%);
+  -webkit-mask: radial-gradient(circle at 50% 100%, transparent 0 34%, #000 36% 100%);
+}
+
+.gh-rock-needle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 3px;
+  height: 84%;
+  transform-origin: 50% 100%;
+  background: linear-gradient(180deg, #efe6d6, #8a7660);
+  box-shadow: 0 0 8px rgba(0, 0, 0, .9);
+  border-radius: 2px;
+  transition: transform .14s ease-out;
+}
+
+.gh-rock-hub {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 15px;
+  height: 15px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #6b5a46, #17120d);
+  box-shadow: 0 0 0 2px #0c0a08;
+}
+
+.gh-rock-label {
+  position: absolute;
+  left: 50%;
+  bottom: 13%;
+  transform: translateX(-50%);
+  font-family: 'Archivo Black', sans-serif;
+  font-size: clamp(11px, 1.15vw, 15px);
+  letter-spacing: .1em;
+  color: rgba(10, 20, 10, .78);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .28);
+}
+
+/* A moldura acende quando o desempenho cai: aviso sem texto. */
+.gh-rock.warning { box-shadow:
+  inset 0 0 0 2px rgba(217, 154, 43, .8),
+  inset 0 -3px 8px rgba(0,0,0,.7),
+  0 7px 0 rgba(0,0,0,.4),
+  0 0 26px rgba(217, 154, 43, .4); }
+.gh-rock.danger { box-shadow:
+  inset 0 0 0 2px rgba(194, 58, 44, .95),
+  inset 0 -3px 8px rgba(0,0,0,.7),
+  0 7px 0 rgba(0,0,0,.4),
+  0 0 30px rgba(194, 58, 44, .6);
+  animation: gh-rock-alerta .7s ease-in-out infinite alternate; }
+
+@keyframes gh-rock-alerta {
+  from { border-color: #0c0a08; }
+  to { border-color: #c23a2c; }
+}
+
+
+/* ======================================================= TELA DE ABERTURA */
+.ts-screen {
+  position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; gap: clamp(24px, 6vw, 96px); z-index: 50; overflow: hidden; transition: opacity .26s ease;
+}
+.ts-screen.saindo { opacity: 0; }
+
+/* Granulado leve: tira o "preto liso de CSS" da tela. */
+.ts-grain {
+  position: absolute; inset: 0; pointer-events: none; opacity: .5;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.028) 0 1px, transparent 1px),
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,.022) 0 1px, transparent 1px),
+    radial-gradient(circle at 45% 85%, rgba(255,255,255,.02) 0 1px, transparent 1px);
+  background-size: 7px 7px, 11px 11px, 13px 13px;
+}
+
+.ts-art { position: relative; height: min(84vh, 640px); }
+.ts-art img {
+  height: 100%; width: auto; display: block;
+  filter: drop-shadow(0 14px 34px rgba(0,0,0,.9));
+  animation: ts-art-entra .8s cubic-bezier(.2,.8,.25,1) both;
+}
+@keyframes ts-art-entra {
+  from { opacity: 0; transform: translateY(18px) rotate(-1.6deg); }
+  to { opacity: 1; transform: translateY(0) rotate(-1deg); }
+}
+
+.ts-side { display: flex; flex-direction: column; gap: clamp(28px, 5vh, 62px); }
+
+.ts-title { margin: 0; display: flex; flex-direction: column; line-height: .82; }
+.ts-title-1, .ts-title-2 {
+  font-family: 'Metal Mania', 'Archivo Black', sans-serif;
+  color: #efe6d6;
+  letter-spacing: .01em;
+  text-shadow: 0 4px 0 rgba(0,0,0,.9), 0 0 42px rgba(226,89,28,.28);
+}
+.ts-title-1 { font-size: clamp(46px, 7.6vw, 108px); }
+.ts-title-2 {
+  font-size: clamp(38px, 6.2vw, 88px);
+  /* Segunda linha em dourado, como o subtitulo da referencia. */
+  background: linear-gradient(180deg, #f6dfa0 0%, #d99a2b 48%, #8a5a12 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(0,0,0,.85));
+  padding-left: .1em;
+}
+.ts-title-sub {
+  font-family: 'Space Mono', monospace; font-size: clamp(10px, 1.1vw, 14px); letter-spacing: .44em; color: rgba(236,228,207,.5); margin-top: 14px;
+}
+
+.ts-press {
+  font-family: 'Special Elite', 'Space Mono', monospace;
+  font-size: clamp(14px, 1.7vw, 24px);
+  line-height: 1.5; letter-spacing: .1em; color: #e07a1c;
+  text-shadow: 0 0 20px rgba(224,122,28,.45);
+  animation: ts-pisca 1.5s steps(1, end) infinite;
+}
+@keyframes ts-pisca { 0%, 62% { opacity: 1; } 63%, 100% { opacity: .18; } }
+
+@media (max-width: 760px) {
+  .ts-screen { flex-direction: column; gap: 22px; }
+  .ts-art { height: 42vh; }
+  .ts-side { align-items: center; text-align: center; }
+}
+
+/* ==================================================== TELA DE CARREGAMENTO */
+.ld-screen {
+  position: absolute; inset: 0; overflow: hidden; z-index: 40;
+  background:
+    radial-gradient(ellipse at 50% 45%, #a8151a 0%, #6d0d12 52%, #3a060a 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+
+/* Vento: faixas escuras que atravessam a tela. Duas camadas em velocidades
+   diferentes dao a sensacao de profundidade sem sprite nenhum. */
+.ld-wind {
+  position: absolute; inset: -20% -60%;
+  background: repeating-linear-gradient(
+    96deg,
+    rgba(0,0,0,0) 0 26px,
+    rgba(0,0,0,.42) 26px 30px,
+    rgba(0,0,0,0) 30px 74px,
+    rgba(0,0,0,.24) 74px 77px
+  );
+  animation: ld-vento 1.6s linear infinite;
+  will-change: transform;
+}
+.ld-wind-2 {
+  background: repeating-linear-gradient(
+    92deg,
+    rgba(0,0,0,0) 0 54px,
+    rgba(0,0,0,.3) 54px 61px,
+    rgba(0,0,0,0) 61px 150px
+  );
+  animation-duration: 2.7s;
+  opacity: .8;
+}
+@keyframes ld-vento {
+  from { transform: translateX(0); }
+  to { transform: translateX(-150px); }
+}
+
+.ld-vignette {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 42%, rgba(0,0,0,.72) 100%);
+}
+
+.ld-angels {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: clamp(8px, 3vw, 54px); margin-bottom: clamp(10px, 3vh, 34px);
+}
+
+.ld-angel {
+  /* A arte e linha PRETA; na tela vermelha ela precisa ser branca. */
+  filter: invert(1) drop-shadow(0 10px 22px rgba(0,0,0,.55));
+  animation: ld-voa 2.7s ease-in-out infinite;
+  animation-delay: var(--atraso, 0s);
+  will-change: transform;
+}
+.ld-angel-0 { width: clamp(84px, 13vw, 190px); opacity: .85; transform: rotate(-7deg); }
+.ld-angel-1 { width: clamp(118px, 18vw, 268px); z-index: 2; }
+.ld-angel-2 { width: clamp(84px, 13vw, 190px); opacity: .85; transform: rotate(7deg) scaleX(-1); }
+
+@keyframes ld-voa {
+  0%, 100% { translate: 0 0; rotate: -1.5deg; }
+  50% { translate: 0 -22px; rotate: 1.5deg; }
+}
+
+.ld-tip {
+  position: relative;
+  font-family: 'Special Elite', 'Space Mono', monospace;
+  font-size: clamp(13px, 1.6vw, 21px);
+  line-height: 1.6; text-align: center; max-width: 30ch;
+  color: #f4ece0; text-shadow: 0 2px 0 rgba(0,0,0,.7);
+  padding: 0 24px;
+}
+
+.ld-bottom {
+  position: absolute; bottom: clamp(24px, 7vh, 72px); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 7px;
+}
+
+/* LOADING com flicker por letra, como neon falhando. */
+.ld-word { display: flex; gap: .04em; }
+.ld-word span {
+  font-family: 'Metal Mania', 'Archivo Black', sans-serif;
+  font-size: clamp(38px, 6.4vw, 92px);
+  line-height: 1;
+  color: #0d0507;
+  text-shadow: 0 0 22px rgba(0,0,0,.75);
+  animation: ld-flick 2.2s steps(1, end) infinite;
+  /* Cada letra falha num instante diferente. */
+  animation-delay: calc(var(--i) * .19s);
+}
+@keyframes ld-flick {
+  0%, 84% { opacity: 1; }
+  85%, 88% { opacity: .18; }
+  89%, 92% { opacity: 1; }
+  93%, 95% { opacity: .3; }
+  96%, 100% { opacity: 1; }
+}
+
+.ld-song {
+  font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(255,240,230,.75);
+}
+.ld-progress {
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .12em; color: rgba(255,240,230,.5);
+}
+
+/* Quem pede menos movimento nao leva vento nem voo na cara. */
+@media (prefers-reduced-motion: reduce) {
+  .ld-wind, .ld-angel, .ld-word span, .ts-press, .ts-art img { animation: none; }
+}

@@ -9,6 +9,7 @@ import { MainMenu } from './pages/MainMenu'
 import { Result } from './pages/Result'
 import { SettingsScreen } from './pages/SettingsScreen'
 import { SongSelect } from './pages/SongSelect'
+import { TitleScreen } from './pages/TitleScreen'
 import { Lobby } from './pages/Lobby'
 import { MultiplayerStart } from './pages/MultiplayerStart'
 import type { PlayerSnapshot, Chart } from './game/types'
@@ -18,6 +19,7 @@ import { useMultiplayer } from './game/useMultiplayer'
 import { MULTIPLAYER_AVAILABLE } from './game/hostMode'
 
 type Screen =
+  | 'title'
   | 'menu'
   | 'settings'
   | 'songs'
@@ -30,7 +32,7 @@ type Screen =
 
 export function App() {
   const settings = useSettings()
-  const [screen, setScreen] = useState<Screen>('menu')
+  const [screen, setScreen] = useState<Screen>('title')
   const [song, setSong] = useState<SongSummary | null>(null)
   const [instrument, setInstrument] = useState<string | null>(null)
   const [multiplayer, setMultiplayer] = useState(false)
@@ -108,6 +110,8 @@ export function App() {
 
   return (
     <>
+      {screen === 'title' && <TitleScreen onStart={() => setScreen('menu')} />}
+
       {screen === 'menu' && (
         <MainMenu
           multiplayerAvailable={MULTIPLAYER_AVAILABLE}

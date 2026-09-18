@@ -8,6 +8,7 @@ import {
 import { useSettings } from '../hooks/useSettings'
 import { formatNumber } from '../utils/format'
 import { useUISounds } from '../hooks/useUISounds'
+import { backgroundStem } from '../game/backgroundPlaylist'
 
 interface Props {
   onBack: () => void
@@ -78,7 +79,9 @@ export function SongSelect({ onBack, onSelect }: Props) {
     stopPreview(previewRef)
     if (!selected) return
 
-    const url = resolveAssetUrl(selected.assets.audio.preview ?? selected.assets.audio.song)
+    // `backgroundStem` em vez de `preview ?? song`: ha musicas sem os dois, so
+    // com stems separados (bass/drums/guitar/vocals), e elas ficavam mudas.
+    const url = resolveAssetUrl(backgroundStem(selected.assets.audio))
     if (!url) return
 
     const audio = new Audio(url)
@@ -87,13 +90,35 @@ export function SongSelect({ onBack, onSelect }: Props) {
     previewRef.current = audio
 
     const startAt = selected.previewStart || Math.min(30, selected.duration * 0.3)
-    const onReady = () => {
-      try { audio.currentTime = startAt } catch {}
+    let comecou = false
+
+    const tocar = () => {
+      if (comecou) return
+      comecou = true
       void audio.play().catch(() => undefined)
     }
+
+    const onReady = () => {
+      // O seek e o trecho bom da musica, entao vale tentar. Mas ele faz o
+      // navegador pedir Range (HTTP 206), e em Ogg/Opus isso as vezes nao
+      // conclui - por isso a falha aqui NAO pode impedir o play.
+      try {
+        if (startAt > 0 && Number.isFinite(audio.duration) && startAt < audio.duration) {
+          audio.currentTime = startAt
+        }
+      } catch {
+        // Segue do inicio: melhor do que silencio.
+      }
+      tocar()
+    }
+
     audio.addEventListener('loadedmetadata', onReady, { once: true })
+    // Rede de seguranca: se os metadados nunca chegarem (arquivo quebrado,
+    // codec sem suporte), toca do inicio em vez de ficar mudo para sempre.
+    const fallback = window.setTimeout(tocar, 900)
 
     return () => {
+      window.clearTimeout(fallback)
       audio.removeEventListener('loadedmetadata', onReady)
       stopPreview(previewRef)
     }

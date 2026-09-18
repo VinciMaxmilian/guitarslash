@@ -1,4 +1,5 @@
 import { GAME_CONFIG, LANE_COUNT } from './config'
+import { fretArrival } from './fretArrival'
 import type { PlayerSession } from './PlayerSession'
 
 export interface RenderOptions {
@@ -570,6 +571,12 @@ export class HighwayRenderer {
     const ctx = this.ctx
     const y = geo.yAt(0)
 
+    // Os trastes tem animacao de chegada com alpha proprio. O fade do reveal
+    // multiplicaria por cima (base * valor) e eles chegariam invisiveis: no
+    // inicio da sequencia isso dava alpha 0.04.
+    const baseAnterior = this.base
+    this.base = 1
+
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const display = options.leftyFlip ? LANE_COUNT - 1 - lane : lane
       const x = geo.xAt(display, 0)
@@ -582,31 +589,51 @@ export class HighwayRenderer {
       )
       const punch = recent ? 1 - (songTime - recent.time) / HIT_EFFECT : 0
 
-      const radiusX = geo.laneWidth * (0.46 + punch * 0.1)
+      // Chegada na intro: cada traste sobe do fundo, passa do lugar e
+      // assenta, em sequencia. Derivado do reveal, nao de contador proprio.
+      const chegada = fretArrival(options.reveal, lane, LANE_COUNT)
+      if (chegada.alpha <= 0) continue
+
+      const radiusX = geo.laneWidth * (0.46 + punch * 0.1) * chegada.scale
       const radiusY = radiusX * 0.46
       const press = held ? radiusY * 0.2 : 0
       const aceso = held || punch > 0
+      // O deslocamento e em fracao do raio, entao o pulo acompanha a escala
+      // da highway em qualquer resolucao.
+      const salto = chegada.offsetY * geo.laneWidth * 0.9
+
+      const cy = y + salto
+
+      // Sombra no piso: fica no lugar do traste, nao acompanha o pulo. E ela
+      // que mostra a altura.
+      if (chegada.progress < 1) {
+        this.alpha(0.3 * chegada.alpha)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)'
+        ctx.beginPath()
+        ctx.ellipse(x, y + radiusY * 0.6, radiusX * 0.9, radiusY * 0.5, 0, 0, Math.PI * 2)
+        ctx.fill()
+      }
 
       // Poco escuro sob o traste: da relevo ao botao.
-      this.alpha(1)
+      this.alpha(chegada.alpha)
       ctx.fillStyle = 'rgba(0, 0, 0, 0.62)'
       ctx.beginPath()
-      ctx.ellipse(x, y + radiusY * 0.5, radiusX * 1.16, radiusY * 1.2, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, cy + radiusY * 0.5, radiusX * 1.16, radiusY * 1.2, 0, 0, Math.PI * 2)
       ctx.fill()
 
       // Aro externo escuro.
       ctx.fillStyle = 'rgba(10, 7, 4, 0.95)'
       ctx.beginPath()
-      ctx.ellipse(x, y + press, radiusX * 1.1, radiusY * 1.12, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, cy + press, radiusX * 1.1, radiusY * 1.12, 0, 0, Math.PI * 2)
       ctx.fill()
 
       // Miolo.
       const fill = ctx.createRadialGradient(
         x,
-        y - radiusY * 0.5 + press,
+        cy - radiusY * 0.5 + press,
         radiusY * 0.08,
         x,
-        y + press,
+        cy + press,
         radiusX,
       )
       if (aceso) {
@@ -620,7 +647,7 @@ export class HighwayRenderer {
       }
       ctx.fillStyle = fill
       ctx.beginPath()
-      ctx.ellipse(x, y + press, radiusX, radiusY, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, cy + press, radiusX, radiusY, 0, 0, Math.PI * 2)
       ctx.fill()
 
       // Anel colorido, grosso.
@@ -634,12 +661,14 @@ export class HighwayRenderer {
       ctx.shadowBlur = 0
 
       // Reflexo no alto do botao.
-      this.alpha(aceso ? 0.7 : 0.35)
+      this.alpha((aceso ? 0.7 : 0.35) * chegada.alpha)
       ctx.beginPath()
-      ctx.ellipse(x, y - radiusY * 0.34 + press, radiusX * 0.5, radiusY * 0.26, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, cy - radiusY * 0.34 + press, radiusX * 0.5, radiusY * 0.26, 0, 0, Math.PI * 2)
       ctx.fillStyle = 'rgba(255,255,255,0.75)'
       ctx.fill()
     }
+
+    this.base = baseAnterior
   }
 
   // ------------------------------------------------------------------ efeitos

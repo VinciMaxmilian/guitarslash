@@ -72,6 +72,10 @@ export interface PlayerSnapshot {
   starPowerEnergy: number
   starPowerActive: boolean
   stars: number
+  /** Desempenho recente, 0..1 (o "rock meter"). */
+  rockMeter: number
+  /** Progresso 0..1 do combo dentro do degrau atual do multiplicador. */
+  comboToNextMultiplier: number
 }
 
 export interface EngineSnapshot {

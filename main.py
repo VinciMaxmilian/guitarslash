@@ -6,6 +6,7 @@
     python main.py host                   backend + frontend na mesma origem (LAN)
     python main.py demo                   gera a musica de demonstracao
     python main.py assets                 copia magazines/ para dentro do frontend
+    python main.py ui-art                 recorta as artes de UI para o frontend
     python main.py build-index            gera o pacote da biblioteca para o CDN
     python main.py test                   roda os testes do backend
 """
@@ -75,6 +76,14 @@ def cmd_assets(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui_art(_: argparse.Namespace) -> int:
+    from backend.app.tools.prepare_ui_art import main as ui_main
+
+    sys.argv = ["ui-art"]
+    ui_main()
+    return 0
+
+
 def cmd_build_index(args: argparse.Namespace) -> int:
     from backend.app.tools.build_index import main as build_main
 
@@ -112,6 +121,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     assets = sub.add_parser("assets", help="copia magazines/ para dentro do frontend")
     assets.set_defaults(func=cmd_assets)
+
+    ui = sub.add_parser("ui-art", help="recorta as artes de UI para o frontend")
+    ui.set_defaults(func=cmd_ui_art)
 
     index = sub.add_parser("build-index", help="gera o pacote da biblioteca para o CDN")
     index.add_argument("--out", type=Path, default=Path("dist-songs"))

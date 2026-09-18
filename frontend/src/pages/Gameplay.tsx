@@ -5,6 +5,8 @@ import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/t
 import { GameEngine } from '../game/GameEngine'
 import { ScoreReporter } from '../game/ScoreReporter'
 import { OpponentHighways } from '../components/OpponentHighways'
+import { RockMeter, ScorePanel } from '../components/ScorePanel'
+import { LoadingScreen } from '../components/LoadingScreen'
 import { judgementCode } from '../game/multiplayerProtocol'
 import type { MultiplayerSession } from '../game/useMultiplayer'
 import type { MPScoreboardRow } from '../game/multiplayerProtocol'
@@ -294,18 +296,7 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
       )}
 
       {!ready && !error && (
-        <div className="overlay">
-          <div className="panel overlay-box">
-            <h2>Carregando</h2>
-            <div className="screen-subtitle">{song.title}</div>
-            {progress.total > 0 && (
-              <div className="note">
-                faixas de áudio: {progress.done} de {progress.total}
-              </div>
-            )}
-            <div className="loading-bar" />
-          </div>
-        </div>
+        <LoadingScreen songTitle={song.title} done={progress.done} total={progress.total} />
       )}
 
       {needsGesture && (
@@ -373,22 +364,13 @@ function Hud({
       {showFps && <div className="fps">{fps} fps</div>}
 
       <div className="hud-top">
-        <div className="hud-plate">
-          <div className="hud-label">Score</div>
-          <div className="hud-score">{formatNumber(player.score)}</div>
-          <div className="hud-combo">
-            {player.combo > 0 ? `${player.combo} de combo` : 'sem combo'}
-            {player.maxCombo > 0 && ` · máx ${player.maxCombo}`}
-          </div>
-
-        </div>
-
-        <div style={{ textAlign: 'center' }}>
-          <div className="hud-label">Multiplicador</div>
-          <div className={`hud-mult-dial m${player.multiplier}`}>
-            <div className="hud-multiplier">x{player.multiplier}</div>
-          </div>
-        </div>
+        <ScorePanel
+          score={player.score}
+          multiplier={player.multiplier}
+          comboProgress={player.comboToNextMultiplier}
+          combo={player.combo}
+          starPowerActive={player.starPowerActive}
+        />
 
         <div className="hud-right">
           <div className="hud-label">Star Power</div>
@@ -410,6 +392,9 @@ function Hud({
               : player.starPowerEnergy >= 0.5
                 ? 'pronto (Enter)'
                 : `${Math.round(player.starPowerEnergy * 100)}%`}
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+            <RockMeter value={player.rockMeter} />
           </div>
         </div>
       </div>

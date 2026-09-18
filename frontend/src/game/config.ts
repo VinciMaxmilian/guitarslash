@@ -58,6 +58,26 @@ export const GAME_CONFIG = {
     multiplierSteps: [10, 20, 30],
     maxMultiplier: 4,
   },
+  /**
+   * Medidor de desempenho (o "rock meter" do jogo de referencia).
+   *
+   * E um valor ROLANTE, e nao a accuracy acumulada: accuracy quase nao se move
+   * depois de algumas centenas de notas, e o ponteiro ficaria parado. Assim o
+   * medidor reage ao que esta acontecendo agora.
+   *
+   * Nao existe fail no MVP; o valor e so leitura. A arquitetura ja permite
+   * ligar "fail com resgate" depois, porque o estado ja esta aqui.
+   */
+  rockMeter: {
+    /** Comeca no meio, como no original. */
+    start: 0.5,
+    /** Ganho por nota acertada. */
+    gainPerHit: 0.022,
+    /** Perda por nota errada: errar dOi mais do que acertar ajuda. */
+    lossPerMiss: 0.055,
+    /** Perda por palhetada no vazio. */
+    lossPerOverstrum: 0.02,
+  },
   starPower: {
     /** Energia ganha por frase de star power completa. */
     energyPerPhrase: 0.25,

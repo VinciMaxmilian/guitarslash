@@ -19,6 +19,9 @@ export class ScoreEngine {
   starPowerEnergy = 0
   starPowerActive = false
 
+  /** Desempenho recente, 0..1. Ver GAME_CONFIG.rockMeter. */
+  rockMeter: number = GAME_CONFIG.rockMeter.start
+
   constructor(
     public readonly playerId: number,
     public readonly playerName: string,
@@ -36,6 +39,19 @@ export class ScoreEngine {
 
   get multiplier(): number {
     return this.baseMultiplier * (this.starPowerActive ? GAME_CONFIG.starPower.multiplier : 1)
+  }
+
+  /**
+   * Progresso 0..1 do combo dentro do degrau atual do multiplicador.
+   *
+   * E o que preenche o anel em volta do multiplicador. No topo, devolve 1.
+   */
+  get comboToNextMultiplier(): number {
+    const { multiplierSteps } = GAME_CONFIG.score
+    const proximo = multiplierSteps.find((step) => this.combo < step)
+    if (proximo === undefined) return 1
+    const anterior = [...multiplierSteps].reverse().find((step) => this.combo >= step) ?? 0
+    return (this.combo - anterior) / (proximo - anterior)
   }
 
   get judged(): number {
@@ -66,16 +82,30 @@ export class ScoreEngine {
     this.score += Math.round(
       GAME_CONFIG.score.notePoints * weight * noteCount * this.multiplier,
     )
+    this.addRock(GAME_CONFIG.rockMeter.gainPerHit * noteCount)
+  }
+
+  private addRock(delta: number): void {
+    this.rockMeter = Math.min(1, Math.max(0, this.rockMeter + delta))
+  }
+
+  /** Faixa em que o ponteiro esta, para a interface escolher a cor. */
+  get rockZone(): 'danger' | 'warning' | 'good' {
+    if (this.rockMeter < 0.25) return 'danger'
+    if (this.rockMeter < 0.5) return 'warning'
+    return 'good'
   }
 
   registerMiss(noteCount: number): void {
     this.notesMissed += noteCount
     this.combo = 0
+    this.addRock(-GAME_CONFIG.rockMeter.lossPerMiss * noteCount)
   }
 
   registerOverstrum(): void {
     this.overstrums++
     this.combo = 0
+    this.addRock(-GAME_CONFIG.rockMeter.lossPerOverstrum)
   }
 
   addSustain(seconds: number): void {
@@ -125,6 +155,8 @@ export class ScoreEngine {
       starPowerEnergy: this.starPowerEnergy,
       starPowerActive: this.starPowerActive,
       stars: this.stars,
+      rockMeter: this.rockMeter,
+      comboToNextMultiplier: this.comboToNextMultiplier,
     }
   }
 }
