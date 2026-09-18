@@ -87,6 +87,22 @@ export class PlayerSession {
     return this.lastJudgement ? { judgement: this.lastJudgement, time: this.lastJudgementAt } : null
   }
 
+  /**
+   * Volta a sessao para um instante da musica.
+   *
+   * Usado pelo loop do treino: reseta notas, placar e efeitos, para cada
+   * repeticao comecar limpa.
+   */
+  seek(songTime: number): void {
+    this.notes.seek(songTime)
+    this.score.reset()
+    this.heldLanes.clear()
+    this.effects.length = 0
+    this.misses.length = 0
+    this.lastJudgement = null
+    this.lastJudgementAt = -10
+  }
+
   handleAction(action: GameAction, pressed: boolean, songTime: number): void {
     const lane = laneForAction(action)
 

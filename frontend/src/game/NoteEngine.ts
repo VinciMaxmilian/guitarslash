@@ -115,6 +115,36 @@ export class NoteEngine {
   }
 
   /** Avanca o tempo: marca misses e contabiliza sustains segurados. */
+  /**
+   * Volta o estado das notas para um instante da musica.
+   *
+   * Usado pelo loop do treino. Sem isto, repetir um trecho encontraria as
+   * notas ja marcadas como acertadas ou perdidas e nada mais aconteceria.
+   */
+  seek(songTime: number): void {
+    for (const gate of this.gates) {
+      gate.status = 'pending'
+      gate.judgement = null
+      for (const state of gate.notes) {
+        state.hit = false
+        state.missed = false
+        state.sustainAlive = false
+        state.scoredUntil = state.note.time
+      }
+    }
+
+    for (const phrase of this.phrases) {
+      phrase.resolved = 0
+      phrase.hits = 0
+      phrase.awarded = false
+    }
+
+    // O ponteiro vai para o primeiro gate que ainda nao passou.
+    const window = GAME_CONFIG.timing.good
+    this.pointer = this.gates.findIndex((gate) => gate.time + window >= songTime)
+    if (this.pointer < 0) this.pointer = this.gates.length
+  }
+
   update(songTime: number, heldLanes: Set<number>): void {
     const goodWindow = GAME_CONFIG.timing.good
 

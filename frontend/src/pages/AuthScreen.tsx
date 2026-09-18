@@ -66,10 +66,39 @@ export function AuthScreen({ auth, onBack }: Props) {
           <div className="lobby-title">{criando ? 'CRIAR CONTA' : 'ENTRAR'}</div>
         </div>
 
-        {auth.session ? (
+        {!auth.enabled ? (
+          <div className="auth-card">
+            <p className="mp-start-p">
+              Conta, leaderboard e músicas da comunidade precisam do Supabase
+              configurado neste build.
+            </p>
+            <div className="auth-vars">
+              <div>VITE_SUPABASE_URL</div>
+              <div>VITE_SUPABASE_ANON_KEY</div>
+            </div>
+            <p className="mp-start-p">
+              Em desenvolvimento, coloque as duas em <code>frontend/.env</code> e{' '}
+              <strong>reinicie o servidor</strong> — o Vite lê o .env só na
+              inicialização. No Netlify, em Environment variables (elas entram no
+              build, então exige novo deploy).
+            </p>
+            <p className="mp-start-p">
+              O resto do jogo funciona sem isso: biblioteca local, singleplayer e
+              multiplayer LAN.
+            </p>
+          </div>
+        ) : auth.loading ? (
+          <div className="auth-card">
+            <p className="mp-start-p">Verificando sessão...</p>
+          </div>
+        ) : auth.session ? (
           <div className="auth-card">
             <p className="mp-start-p">
               Conectado como <strong>{auth.displayName ?? auth.session.user.email}</strong>.
+            </p>
+            <p className="mp-start-p">
+              Seus placares vão para o leaderboard, suas configurações
+              acompanham a conta e você pode enviar músicas para a comunidade.
             </p>
             <button
               className="btn"

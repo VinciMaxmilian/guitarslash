@@ -108,7 +108,18 @@ export class AudioEngine {
   private stems: Stem[] = []
 
   /** Instante do AudioContext em que a posicao 0 da musica acontece. */
-  private zeroCtxTime = 0
+  /** Instante do contexto em que a contagem de posicao comecou. */
+  private startCtxTime = 0
+  /** Posicao da musica naquele instante. */
+  private startOffset = 0
+  /**
+   * Velocidade de reproducao. 1 = normal; usado pelo modo treino.
+   *
+   * O Web Audio nao preserva o tom ao mudar a taxa, entao a musica soa mais
+   * grave em velocidade reduzida. Para treinar isso e aceitavel, e evita
+   * carregar uma biblioteca de time-stretch.
+   */
+  private rate = 1
   private pausedAt = 0
   private running = false
 
@@ -238,12 +249,14 @@ export class AudioEngine {
       if (from >= stem.buffer.duration) continue
       const source = ctx.createBufferSource()
       source.buffer = stem.buffer
+      source.playbackRate.value = this.rate
       source.connect(stem.gain)
       source.start(startAt, from)
       stem.source = source
     }
 
-    this.zeroCtxTime = startAt - from
+    this.startCtxTime = startAt
+    this.startOffset = from
     this.pausedAt = from
     this.running = true
   }
@@ -269,7 +282,44 @@ export class AudioEngine {
   /** Posicao atual da musica em segundos. Negativa antes do inicio. */
   get currentTime(): number {
     if (!this.running || !this.ctx) return this.pausedAt
-    return this.ctx.currentTime - this.zeroCtxTime
+    // A posicao avanca `rate` segundos de musica por segundo de contexto. Com
+    // rate 1 isto e identico a `ctx.currentTime - zeroCtxTime`.
+    return this.startOffset + (this.ctx.currentTime - this.startCtxTime) * this.rate
+  }
+
+  get playbackRate(): number {
+    return this.rate
+  }
+
+  /**
+   * Troca a velocidade sem pular no tempo.
+   *
+   * Re-ancora a contagem na posicao ATUAL: sem isso, mudar a taxa reescreveria
+   * o passado e a musica saltaria.
+   */
+  setPlaybackRate(rate: number): void {
+    const alvo = Math.min(2, Math.max(0.25, rate))
+    if (Math.abs(alvo - this.rate) < 0.001) return
+
+    const posicao = this.currentTime
+    this.rate = alvo
+
+    if (this.ctx && this.running) {
+      this.startOffset = posicao
+      this.startCtxTime = this.ctx.currentTime
+      for (const stem of this.stems) {
+        stem.source?.playbackRate.setValueAtTime(alvo, this.ctx.currentTime)
+      }
+    } else {
+      this.pausedAt = posicao
+    }
+  }
+
+  /** Salta para uma posicao da musica. Usado pelo loop do treino. */
+  seek(seconds: number): void {
+    const destino = Math.max(0, seconds)
+    if (this.running) this.scheduleStart(0, destino)
+    else this.pausedAt = destino
   }
 
   /** True quando da para cortar so o instrumento do jogador. */

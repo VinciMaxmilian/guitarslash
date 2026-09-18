@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { api, resolveAssetUrl } from '../api/client'
 import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/types'
-import { GameEngine } from '../game/GameEngine'
+import { GameEngine, type TrainingOptions } from '../game/GameEngine'
 import { ScoreReporter } from '../game/ScoreReporter'
 import { OpponentHighways } from '../components/OpponentHighways'
 import { RockMeter, ScorePanel } from '../components/ScorePanel'
@@ -23,11 +23,21 @@ interface Props {
   difficulty: string
   /** Presente apenas em partida LAN. */
   mp?: MultiplayerSession
+  /** Presente apenas no modo treino: trecho em loop e velocidade. */
+  training?: TrainingOptions
   onExit: () => void
   onFinish: (results: PlayerSnapshot[], chart: Chart) => void
 }
 
-export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }: Props) {
+export function Gameplay({
+  song,
+  instrument,
+  difficulty,
+  mp,
+  training,
+  onExit,
+  onFinish,
+}: Props) {
   const settings = useSettings()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -83,6 +93,7 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
           videoUrl: resolveAssetUrl(song.assets.backgroundVideo),
           settings,
           songDelay: song.delay,
+          training,
           onSnapshot: setSnapshot,
           onFinish: (players) => onFinish(players, chart),
           // Cada nota resolvida entra na fila; sai junto do placar a 10 Hz.
@@ -126,7 +137,9 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
     }
     // settings entra so na montagem; mudancas sao aplicadas pelo efeito abaixo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song.id, instrument, difficulty, uiSounds])
+    // `training` entra nas deps: trocar trecho ou velocidade precisa remontar
+    // a engine, senao o loop continuaria no trecho antigo.
+  }, [song.id, instrument, difficulty, training, uiSounds])
 
   // Configuracoes alteradas em tempo real chegam na engine sem remontar nada.
   useEffect(() => {

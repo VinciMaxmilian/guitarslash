@@ -68,6 +68,22 @@ export class ScoreEngine {
     return GAME_CONFIG.stars.filter((threshold) => accuracy >= threshold).length
   }
 
+  /** Volta tudo ao estado inicial. Usado por cada repeticao do treino. */
+  reset(): void {
+    this.score = 0
+    this.combo = 0
+    this.maxCombo = 0
+    this.notesHit = 0
+    this.notesMissed = 0
+    this.overstrums = 0
+    this.perfect = 0
+    this.great = 0
+    this.good = 0
+    this.starPowerEnergy = 0
+    this.starPowerActive = false
+    this.rockMeter = GAME_CONFIG.rockMeter.start
+  }
+
   registerHit(judgement: Judgement, noteCount: number): void {
     const weight = GAME_CONFIG.score.judgementWeight[judgement] ?? 1
 

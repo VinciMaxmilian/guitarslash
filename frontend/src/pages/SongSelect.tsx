@@ -164,8 +164,7 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
       )}
 
       <div className="song-list-scroll">
-        {CLOUD_ENABLED && (
-          <div className="sl-tabs">
+        <div className="sl-tabs">
             <button
               className={`sl-tab ${aba === 'principais' ? 'ativa' : ''}`}
               onClick={() => {
@@ -184,26 +183,34 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
             >
               COMUNIDADE
             </button>
-            {onUpload && (
-              <button
-                className="sl-tab enviar"
-                onClick={() => {
-                  uiSounds.play('select')
-                  onUpload()
-                }}
-              >
-                + ENVIAR
-              </button>
-            )}
-          </div>
-        )}
+          <button
+            className="sl-tab enviar"
+            disabled={!onUpload}
+            title={
+              onUpload
+                ? undefined
+                : CLOUD_ENABLED
+                  ? 'Entre com uma conta para enviar musica'
+                  : 'Conta e comunidade exigem VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'
+            }
+            onClick={() => {
+              if (!onUpload) return
+              uiSounds.play('select')
+              onUpload()
+            }}
+          >
+            + ENVIAR
+          </button>
+        </div>
 
         <div className="song-list-title">
           <span>
             {aba === 'comunidade'
-              ? comunidade === null
-                ? 'CARREGANDO...'
-                : `${comunidade.length} MÚSICA(S) DA COMUNIDADE`
+              ? !CLOUD_ENABLED
+                ? 'COMUNIDADE INDISPONÍVEL'
+                : comunidade === null
+                  ? 'CARREGANDO...'
+                  : `${comunidade.length} MÚSICA(S) DA COMUNIDADE`
               : library
                 ? `${library.count} MÚSICA(S)`
                 : 'CARREGANDO...'}
@@ -215,7 +222,16 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
           )}
         </div>
 
-        {aba === 'comunidade' && comunidade?.length === 0 && (
+        {aba === 'comunidade' && !CLOUD_ENABLED && (
+          <div className="sl-vazio">
+            As músicas da comunidade precisam do Supabase configurado neste
+            build (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY). Em dev, ponha as
+            duas em frontend/.env e <strong>reinicie o servidor</strong> — o Vite
+            lê o .env só na inicialização.
+          </div>
+        )}
+
+        {aba === 'comunidade' && CLOUD_ENABLED && comunidade?.length === 0 && (
           <div className="sl-vazio">
             Nenhuma música da comunidade ainda.
             {onUpload ? ' Seja o primeiro a enviar.' : ' Entre com uma conta para enviar a sua.'}

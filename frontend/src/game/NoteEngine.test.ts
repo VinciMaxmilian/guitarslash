@@ -226,3 +226,76 @@ describe('modo sem palhetada', () => {
     expect(cb.calls.hit).toBe(1)
   })
 })
+
+describe('NoteEngine — seek (loop do treino)', () => {
+  it('limpa o estado das notas ja resolvidas', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(1, 0, 1), note(2, 1, 2)]), cb)
+
+    // Deixa as duas passarem: viram missed.
+    engine.update(5, new Set())
+    expect(engine.gates.every((g) => g.status === 'missed')).toBe(true)
+
+    engine.seek(0)
+    expect(engine.gates.every((g) => g.status === 'pending')).toBe(true)
+    expect(engine.gates.every((g) => g.notes.every((n) => !n.missed && !n.hit))).toBe(true)
+  })
+
+  it('depois do seek as notas voltam a poder ser acertadas', () => {
+    // Sem isto, repetir um trecho no treino nao exercitaria nada.
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(1, 0, 1)]), cb)
+
+    engine.update(5, new Set())
+    expect(cb.calls.miss).toBe(1)
+
+    engine.seek(0)
+    engine.tryFret(1, new Set([0]))
+    expect(cb.calls.hit).toBe(1)
+  })
+
+  it('o ponteiro vai para a primeira nota do trecho', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(
+      chartWith([note(1, 0, 1), note(5, 1, 5), note(9, 2, 9)]),
+      cb,
+    )
+    engine.update(20, new Set())
+    cb.calls.miss = 0
+
+    // Volta para o meio: so as notas dali para frente sao julgadas.
+    engine.seek(4.5)
+    engine.update(6, new Set())
+    expect(cb.calls.miss).toBe(1)
+  })
+
+  it('seek para depois do fim nao quebra', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(chartWith([note(1, 0, 1)]), cb)
+    engine.seek(999)
+    engine.update(1000, new Set())
+    expect(cb.calls.miss).toBe(0)
+  })
+
+  it('zera o progresso das frases de star power', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(
+      chartWith([note(1, 0, 1), note(2, 1, 2)], [{ time: 0, duration: 3 }]),
+      cb,
+    )
+    engine.tryFret(1, new Set([0]))
+    engine.seek(0)
+    // A frase precisa poder ser conquistada de novo na repeticao.
+    engine.tryFret(1, new Set([0]))
+    engine.tryFret(2, new Set([1]))
+    engine.update(3.5, new Set())
+    expect(cb.calls.phrase).toBeGreaterThan(0)
+  })
+
+  it('chart vazio nao quebra', () => {
+    const engine = new NoteEngine(chartWith([]), callbacks())
+    engine.seek(0)
+    engine.update(10, new Set())
+    expect(engine.gates).toHaveLength(0)
+  })
+})

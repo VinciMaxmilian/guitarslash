@@ -38,6 +38,17 @@ export interface GameEngineOptions {
    * agregado e vem a ~15 Hz - nota individual se perderia.
    */
   onHit?: (event: HitEvent) => void
+  /** Treino: trecho a repetir e velocidade. Ausente = partida normal. */
+  training?: TrainingOptions
+}
+
+export interface TrainingOptions {
+  /** Inicio do trecho, em segundos de chart. */
+  from: number
+  /** Fim do trecho. O loop volta ao inicio ao passar daqui. */
+  to: number
+  /** 0.25 a 1. O audio fica mais grave: o Web Audio nao preserva o tom. */
+  rate: number
 }
 
 const SNAPSHOT_INTERVAL = 0.066 // ~15 Hz: HUD fluido sem re-render por frame
@@ -113,13 +124,43 @@ export class GameEngine {
     this.intro.markLoaded()
   }
 
+  /** Velocidade e trecho do treino, alteraveis durante a partida. */
+  setTraining(training: TrainingOptions): void {
+    this.options = { ...this.options, training }
+    this.audio.setPlaybackRate(training.rate)
+  }
+
+  /**
+   * Volta ao inicio do trecho de treino.
+   *
+   * Reseta tambem as notas e o placar: repetir um trecho com as notas ja
+   * marcadas como acertadas nao exercitaria nada.
+   */
+  restartLoop(): void {
+    const training = this.options.training
+    if (!training) return
+    for (const session of this.sessions) session.seek(training.from)
+    this.audio.seek(training.from + this.options.songDelay)
+    this.emitSnapshot(true)
+  }
+
   start(): void {
     if (this.started) return
     this.started = true
     // O audio comeca antes para que songTime (= audio - delay) chegue em
     // -leadIn no inicio da intro. Sem descontar o delay, a contagem
     // regressiva ficaria mais longa que o previsto exatamente nessas musicas.
-    this.audio.scheduleStart(audioStartDelay(IntroSequence.leadIn, this.options.songDelay))
+    const training = this.options.training
+    if (training) {
+      this.audio.setPlaybackRate(training.rate)
+      // Treino comeca no trecho, sem intro: ninguem quer 4,5 s de contagem a
+      // cada repeticao.
+      for (const session of this.sessions) session.seek(training.from)
+      this.audio.scheduleStart(0.35, training.from + this.options.songDelay)
+      this.intro.markLoaded()
+    } else {
+      this.audio.scheduleStart(audioStartDelay(IntroSequence.leadIn, this.options.songDelay))
+    }
     this.input.attach()
     this.lastFrameTime = performance.now() / 1000
     this.rafId = requestAnimationFrame(this.loop)
@@ -310,7 +351,11 @@ export class GameEngine {
       for (const session of this.sessions) {
         session.update(songTime, delta)
       }
-      if (songTime > this.duration + END_PADDING) {
+      const training = this.options.training
+      if (training) {
+        // Treino nunca "termina": ao passar do fim do trecho, repete.
+        if (songTime >= training.to) this.restartLoop()
+      } else if (songTime > this.duration + END_PADDING) {
         this.finish()
       }
     }

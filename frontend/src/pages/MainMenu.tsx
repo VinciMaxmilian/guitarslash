@@ -15,8 +15,12 @@ interface Props {
   onPlay: () => void
   onSettings: () => void
   onMultiplayer: () => void
-  /** undefined = nuvem nao configurada neste build; o item nao aparece. */
-  onAccount?: () => void
+  onTraining: () => void
+  onAccount: () => void
+  /** false = nuvem nao configurada. O item aparece MESMO ASSIM, desligado com
+   *  explicacao: item que desaparece deixa o jogador procurando algo que nao
+   *  existe mais. */
+  accountAvailable: boolean
   accountName?: string | null
   /**
    * Multiplayer LAN so existe quando esta pagina vem do processo do host.
@@ -30,7 +34,9 @@ export function MainMenu({
   onPlay,
   onSettings,
   onMultiplayer,
+  onTraining,
   onAccount,
+  accountAvailable,
   accountName,
   multiplayerAvailable,
 }: Props) {
@@ -39,8 +45,6 @@ export function MainMenu({
   
   const options: MenuOption[] = [
     { label: 'QUICKPLAY', action: onPlay, cls: 'menu-item-3', disabled: false },
-    { label: 'CAREER', action: undefined, cls: 'menu-item-1', disabled: true },
-    { label: 'CO-OP CAREER', action: undefined, cls: 'menu-item-2', disabled: true },
     {
       label: 'MULTIPLAYER',
       action: onMultiplayer,
@@ -50,18 +54,17 @@ export function MainMenu({
         ? undefined
         : 'Servidor de partidas nao configurado neste build (VITE_WS_URL) e a pagina nao vem de um host de LAN',
     },
-    { label: 'TRAINING', action: undefined, cls: 'menu-item-5', disabled: true },
+    { label: 'TRAINING', action: onTraining, cls: 'menu-item-5', disabled: false },
     { label: 'OPTIONS', action: onSettings, cls: 'menu-item-6', disabled: false },
-    ...(onAccount
-      ? [
-          {
-            label: accountName ? accountName.toUpperCase() : 'LOGIN',
-            action: onAccount,
-            cls: 'menu-item-2',
-            disabled: false,
-          },
-        ]
-      : []),
+    {
+      label: accountName ? accountName.toUpperCase() : 'LOGIN',
+      action: onAccount,
+      cls: 'menu-item-2',
+      disabled: false,
+      hint: accountAvailable
+        ? undefined
+        : 'Conta e leaderboard exigem VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY',
+    },
   ]
 
   useEffect(() => {

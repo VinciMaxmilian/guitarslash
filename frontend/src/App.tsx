@@ -12,6 +12,8 @@ import { SongSelect } from './pages/SongSelect'
 import { TitleScreen } from './pages/TitleScreen'
 import { AuthScreen } from './pages/AuthScreen'
 import { UploadSong } from './pages/UploadSong'
+import { TrainingSetup } from './pages/TrainingSetup'
+import type { TrainingOptions } from './game/GameEngine'
 import { useAuth } from './auth/useAuth'
 import { submitScore } from './lib/scores'
 import { useSettingsSync } from './settings/useSettingsSync'
@@ -36,6 +38,7 @@ type Screen =
   | 'lobby'
   | 'auth'
   | 'upload'
+  | 'training'
 
 export function App() {
   const settings = useSettings()
@@ -46,6 +49,9 @@ export function App() {
   const [multiplayer, setMultiplayer] = useState(false)
   //: undefined = criar sala nova; string = entrar na sala com esse codigo.
   const [joinCode, setJoinCode] = useState<string | undefined>(undefined)
+  //: Treino: mesma gameplay, com trecho em loop e velocidade reduzida.
+  const [training, setTraining] = useState(false)
+  const [trainingOptions, setTrainingOptions] = useState<TrainingOptions | null>(null)
   const [selection, setSelection] = useState<{
     song: SongSummary
     instrument: string
@@ -126,12 +132,20 @@ export function App() {
           multiplayerAvailable={MULTIPLAYER_AVAILABLE}
           onPlay={() => {
             setMultiplayer(false)
+            setTraining(false)
             loadedFor.current = null
             setScreen('songs')
           }}
           onSettings={() => setScreen('settings')}
-          onAccount={auth.enabled ? () => setScreen('auth') : undefined}
+          onAccount={() => setScreen('auth')}
+          accountAvailable={auth.enabled}
           accountName={auth.displayName}
+          onTraining={() => {
+            setMultiplayer(false)
+            setTraining(true)
+            loadedFor.current = null
+            setScreen('songs')
+          }}
           onMultiplayer={() => setScreen('mp-start')}
         />
       )}
@@ -201,6 +215,19 @@ export function App() {
           onBack={() => setScreen('instrument')}
           onSelect={(difficulty) => {
             setSelection({ song, instrument, difficulty })
+            setScreen(training ? 'training' : 'game')
+          }}
+        />
+      )}
+
+      {screen === 'training' && selection && (
+        <TrainingSetup
+          song={selection.song}
+          instrument={selection.instrument}
+          difficulty={selection.difficulty}
+          onBack={() => setScreen('difficulty')}
+          onStart={(opcoes) => {
+            setTrainingOptions(opcoes)
             setScreen('game')
           }}
         />
@@ -212,7 +239,8 @@ export function App() {
           instrument={selection.instrument}
           difficulty={selection.difficulty}
           mp={multiplayer ? mp : undefined}
-          onExit={backFromGame}
+          training={training ? (trainingOptions ?? undefined) : undefined}
+          onExit={training ? () => setScreen('training') : backFromGame}
           onFinish={(players, chart) => {
             setResults({ players, chart })
             setScreen('result')
@@ -220,7 +248,7 @@ export function App() {
             // envio nao interfere na tela de resultado.
             const eu = players[0]
             const userId = auth.session?.user?.id
-            if (eu && userId && !multiplayer) {
+            if (eu && userId && !multiplayer && !training) {
               void submitScore(userId, {
                 songId: selection.song.id,
                 instrument: selection.instrument,

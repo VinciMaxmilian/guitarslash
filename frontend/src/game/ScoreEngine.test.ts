@@ -223,3 +223,31 @@ describe('ScoreEngine — progresso do multiplicador', () => {
     expect(engine.comboToNextMultiplier).toBeCloseTo(0, 5)
   })
 })
+
+describe('ScoreEngine — reset (loop do treino)', () => {
+  it('volta tudo ao inicial', () => {
+    const engine = new ScoreEngine(0, 'Ana', 100)
+    for (let i = 0; i < 15; i += 1) engine.registerHit('perfect', 1)
+    engine.registerMiss(2)
+    engine.addStarPowerPhrase()
+    engine.reset()
+
+    expect(engine.score).toBe(0)
+    expect(engine.combo).toBe(0)
+    expect(engine.maxCombo).toBe(0)
+    expect(engine.notesHit).toBe(0)
+    expect(engine.notesMissed).toBe(0)
+    expect(engine.multiplier).toBe(1)
+    expect(engine.starPowerEnergy).toBe(0)
+    expect(engine.starPowerActive).toBe(false)
+    expect(engine.rockMeter).toBeCloseTo(0.5, 5)
+  })
+
+  it('preserva a identidade do jogador', () => {
+    const engine = new ScoreEngine(7, 'Beto', 100)
+    engine.reset()
+    expect(engine.playerId).toBe(7)
+    expect(engine.playerName).toBe('Beto')
+    expect(engine.totalNotes).toBe(100)
+  })
+})
