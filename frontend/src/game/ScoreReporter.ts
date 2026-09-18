@@ -1,3 +1,4 @@
+import type { MPHit } from './multiplayerProtocol'
 import type { PlayerSnapshot } from './types'
 
 /**
@@ -23,7 +24,7 @@ const FIELDS = [
 ] as const
 
 type Field = (typeof FIELDS)[number]
-type Payload = Partial<Record<Field, number | boolean>>
+type Payload = Partial<Record<Field, number | boolean>> & { hits?: MPHit[] }
 
 /** Accuracy e float; sO vale mandar quando muda o suficiente para aparecer. */
 const ACCURACY_EPSILON = 0.001
@@ -50,6 +51,14 @@ const INITIAL: Payload = {
 export class ScoreReporter {
   private last: Payload = { ...INITIAL }
   private lastSentAt = -Infinity
+  //: Acertos ainda nao enviados. Sao EVENTOS, entao nao passam pelo diff:
+  //: perder um deixaria um buraco na faixa espelho dos outros.
+  private pendingHits: MPHit[] = []
+
+  /** Enfileira um acerto para o proximo envio. */
+  queueHit(hit: MPHit): void {
+    this.pendingHits.push(hit)
+  }
 
   constructor(
     private readonly send: (payload: Payload) => void,
@@ -80,10 +89,16 @@ export class ScoreReporter {
       if (value !== previous) diff[field] = value as number | boolean
     }
 
-    if (Object.keys(diff).length === 0) return false
+    // Evento pendente justifica a mensagem sozinho, mesmo sem mudanca de
+    // estado: o placar pode estar igual e ainda assim haver nota acertada.
+    if (Object.keys(diff).length === 0 && this.pendingHits.length === 0) return false
 
     this.last = { ...this.last, ...diff }
     this.lastSentAt = now
+    if (this.pendingHits.length > 0) {
+      diff.hits = this.pendingHits
+      this.pendingHits = []
+    }
     this.send(diff)
     return true
   }
@@ -99,5 +114,6 @@ export class ScoreReporter {
   reset(): void {
     this.last = { ...INITIAL }
     this.lastSentAt = -Infinity
+    this.pendingHits = []
   }
 }

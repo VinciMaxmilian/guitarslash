@@ -1,0 +1,24 @@
+# A biblioteca nao entra na imagem: em producao ela vem do CDN.
+songs/
+magazines/
+UI Sounds/
+frontend/
+dist-songs/
+
+.git/
+.venv/
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+backend/tests/
+
+plan.md
+DEPLOY.md
+README.md
+*.dc.html
+.vscode/
+.env
+.env.*

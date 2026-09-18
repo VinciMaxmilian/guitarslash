@@ -7,6 +7,10 @@
 
 export const PROTOCOL_VERSION = '1'
 
+/** Espelha CODE_ALPHABET/CODE_LENGTH do backend: sem O/0 nem I/1. */
+export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+export const CODE_LENGTH = 4
+
 export type RoomPhase = 'lobby' | 'loading' | 'playing' | 'results'
 export type RoomMode = 'versus' | 'coop'
 
@@ -38,6 +42,8 @@ export interface MPPlayer {
 }
 
 export interface MPRoom {
+  /** Codigo curto que os outros jogadores digitam para entrar. */
+  code: string
   phase: RoomPhase
   mode: RoomMode
   songId: string | null
@@ -46,12 +52,31 @@ export interface MPRoom {
   players: MPPlayer[]
 }
 
+/**
+ * Acerto de um jogador: [tempoMs, lane, julgamento].
+ *
+ * Formato compacto porque sao ~13 por segundo por jogador. Serve para os
+ * outros desenharem a faixa dele: a faixa em si nao viaja pela rede, todo
+ * mundo ja tem o chart da musica.
+ */
+export type MPHit = [number, number, number]
+
+/** 0..3, na ordem em que o julgamento vale mais. */
+export const HIT_JUDGEMENTS = ['miss', 'good', 'great', 'perfect'] as const
+
+export function judgementCode(judgement: string): number {
+  const index = HIT_JUDGEMENTS.indexOf(judgement as (typeof HIT_JUDGEMENTS)[number])
+  return index < 0 ? 0 : index
+}
+
 /** Linha do placar agregado que o host manda a ~10 Hz durante a musica. */
 export interface MPScoreboardRow extends MPScoreState {
   id: string
   name: string
   connected: boolean
   finished: boolean
+  /** Acertos desde a ultima atualizacao. */
+  hits?: MPHit[]
 }
 
 export interface MPScoreboard {
@@ -85,6 +110,8 @@ export interface MPResults {
 export const MP_ERROR = {
   PROTOCOL: 'PROTOCOL_VERSION',
   ROOM_FULL: 'ROOM_FULL',
+  ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
+  TOO_MANY_ROOMS: 'TOO_MANY_ROOMS',
   NOT_HOST: 'NOT_HOST',
   ALREADY_JOINED: 'ALREADY_JOINED',
   BAD_PAYLOAD: 'BAD_PAYLOAD',
@@ -98,7 +125,12 @@ export interface MPError {
   fatal: boolean
 }
 
-/** Erros em que insistir nao ajuda: versao incompativel ou sala cheia. */
-export const FATAL_ERRORS: readonly string[] = [MP_ERROR.PROTOCOL, MP_ERROR.ROOM_FULL]
+/** Erros em que insistir nao ajuda: reconectar daria o mesmo resultado. */
+export const FATAL_ERRORS: readonly string[] = [
+  MP_ERROR.PROTOCOL,
+  MP_ERROR.ROOM_FULL,
+  MP_ERROR.ROOM_NOT_FOUND,
+  MP_ERROR.TOO_MANY_ROOMS,
+]
 
 export type MPConnection = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed'

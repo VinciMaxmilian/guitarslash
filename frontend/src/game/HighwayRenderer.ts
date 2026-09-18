@@ -195,18 +195,22 @@ export class HighwayRenderer {
     ctx.fill(path)
     ctx.restore()
 
-    // Divisorias das lanes, mais fortes perto do jogador.
+    // Divisorias das lanes. Na referencia elas sao claras e bem visiveis ao
+    // longo de toda a pista - sao elas que vendem a perspectiva.
     const divider = ctx.createLinearGradient(0, nearY, 0, farY)
-    divider.addColorStop(0, 'rgba(236, 228, 207, 0.35)')
-    divider.addColorStop(1, 'rgba(236, 228, 207, 0.03)')
+    divider.addColorStop(0, 'rgba(246, 240, 224, 0.85)')
+    divider.addColorStop(0.45, 'rgba(246, 240, 224, 0.4)')
+    divider.addColorStop(1, 'rgba(246, 240, 224, 0.04)')
     ctx.strokeStyle = divider
-    ctx.lineWidth = 1
+    ctx.lineWidth = Math.max(1.5, geo.viewport.width * 0.0022)
+    ctx.lineCap = 'round'
     ctx.beginPath()
     for (let lane = 1; lane < LANE_COUNT; lane++) {
       ctx.moveTo(geo.xAt(lane - 0.5, 0), nearY)
       ctx.lineTo(geo.xAt(lane - 0.5, 1), farY)
     }
     ctx.stroke()
+    ctx.lineCap = 'butt' 
 
     // Trilhos laterais. Ficam mais quentes conforme o multiplicador sobe.
     const heat = Math.min(1, (session.score.multiplier - 1) / 3)
@@ -422,66 +426,104 @@ export class HighwayRenderer {
     const scale = geo.scaleAt(t)
     const x = geo.xAt(lane, t)
     const y = geo.yAt(t)
-    const width = geo.laneWidth * 0.92 * scale
-    const height = width * 0.5
-    const radius = height * 0.48
+    // Gema mais alta que o retangulo achatado anterior: e o que da a leitura
+    // de "botao" da referencia, em vez de um tijolo deitado.
+    const width = geo.laneWidth * 0.86 * scale
+    const height = width * 0.74
+    const radius = height * 0.5
 
     // Sombra no piso: e o que "assenta" a nota na pista.
-    this.alpha(0.4 * fade)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
+    this.alpha(0.42 * fade)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)'
     ctx.beginPath()
-    ctx.ellipse(x, y + height * 0.42, width * 0.5, height * 0.3, 0, 0, Math.PI * 2)
+    ctx.ellipse(x, y + height * 0.5, width * 0.52, height * 0.24, 0, 0, Math.PI * 2)
     ctx.fill()
 
     this.alpha(fade)
     if (options.effects !== 'low') {
-      ctx.shadowBlur = (options.effects === 'high' ? 22 : 12) * scale
-      ctx.shadowColor = color
+      ctx.shadowBlur = (options.effects === 'high' ? 24 : 13) * scale
+      ctx.shadowColor = starPower ? 'rgba(180, 240, 255, 0.9)' : color
     }
 
-    // Corpo.
+    // Aro externo escuro: separa a gema da pista, como no jogo de referencia.
     roundedRect(ctx, x - width / 2, y - height / 2, width, height, radius)
-    const body = ctx.createLinearGradient(0, y - height / 2, 0, y + height / 2)
-    if (type === 'tap') {
-      body.addColorStop(0, 'rgba(46, 38, 28, 0.95)')
-      body.addColorStop(1, 'rgba(18, 14, 10, 0.95)')
-    } else {
-      body.addColorStop(0, lighten(color, 0.55))
-      body.addColorStop(0.45, color)
-      body.addColorStop(1, darken(color, 0.35))
-    }
-    ctx.fillStyle = body
+    ctx.fillStyle = 'rgba(8, 5, 3, 0.92)'
     ctx.fill()
     ctx.shadowBlur = 0
 
-    // Aro.
-    ctx.lineWidth = Math.max(1.2, 2.6 * scale)
-    ctx.strokeStyle = starPower ? 'rgba(236, 249, 255, 0.95)' : lighten(color, 0.7)
-    ctx.stroke()
-
-    // Brilho superior: da volume a nota.
-    this.alpha(0.55 * fade)
+    // Anel colorido.
+    const ringWidth = Math.max(1.6, width * 0.13)
     roundedRect(
       ctx,
-      x - width * 0.42,
-      y - height * 0.4,
-      width * 0.84,
-      height * 0.34,
-      height * 0.2,
+      x - width / 2 + ringWidth * 0.5,
+      y - height / 2 + ringWidth * 0.5,
+      width - ringWidth,
+      height - ringWidth,
+      radius,
     )
-    const gloss = ctx.createLinearGradient(0, y - height * 0.4, 0, y - height * 0.06)
-    gloss.addColorStop(0, 'rgba(255,255,255,0.75)')
+    ctx.lineWidth = ringWidth
+    ctx.strokeStyle = starPower ? 'rgba(236, 249, 255, 0.98)' : lighten(color, 0.45)
+    ctx.stroke()
+
+    // Domo interno.
+    const inset = ringWidth * 1.15
+    roundedRect(
+      ctx,
+      x - width / 2 + inset,
+      y - height / 2 + inset,
+      width - inset * 2,
+      height - inset * 2,
+      Math.max(1, radius - inset),
+    )
+    const body = ctx.createRadialGradient(
+      x,
+      y - height * 0.26,
+      height * 0.05,
+      x,
+      y + height * 0.1,
+      width * 0.62,
+    )
+    if (type === 'tap') {
+      // Tap nota e "vazada": miolo escuro com a cor so no anel.
+      body.addColorStop(0, 'rgba(58, 48, 36, 0.98)')
+      body.addColorStop(1, 'rgba(14, 10, 7, 0.98)')
+    } else if (starPower) {
+      body.addColorStop(0, '#ffffff')
+      body.addColorStop(0.45, '#cfe9f2')
+      body.addColorStop(1, '#5d93ad')
+    } else {
+      body.addColorStop(0, lighten(color, 0.7))
+      body.addColorStop(0.42, color)
+      body.addColorStop(1, darken(color, 0.42))
+    }
+    ctx.fillStyle = body
+    ctx.fill()
+
+    // Brilho especular no alto: da volume ao domo.
+    this.alpha(0.6 * fade)
+    ctx.beginPath()
+    ctx.ellipse(
+      x,
+      y - height * 0.24,
+      width * 0.29,
+      height * 0.16,
+      0,
+      0,
+      Math.PI * 2,
+    )
+    const gloss = ctx.createLinearGradient(0, y - height * 0.42, 0, y - height * 0.02)
+    gloss.addColorStop(0, 'rgba(255,255,255,0.9)')
     gloss.addColorStop(1, 'rgba(255,255,255,0)')
     ctx.fillStyle = gloss
     ctx.fill()
 
-    // HOPO e tap ganham um miolo diferente, para leitura rapida.
+    // HOPO ganha um miolo claro; tap, um ponto da propria cor. Leitura rapida.
     if (type !== 'normal') {
       this.alpha(fade)
-      const inner = width * 0.22
+      const inner = width * 0.17
       ctx.beginPath()
-      ctx.ellipse(x, y, inner, inner * 0.6, 0, 0, Math.PI * 2)
-      ctx.fillStyle = type === 'tap' ? color : 'rgba(255,255,255,0.92)'
+      ctx.ellipse(x, y, inner, inner * 0.82, 0, 0, Math.PI * 2)
+      ctx.fillStyle = type === 'tap' ? lighten(color, 0.3) : 'rgba(255,255,255,0.95)'
       ctx.fill()
     }
   }
@@ -540,41 +582,63 @@ export class HighwayRenderer {
       )
       const punch = recent ? 1 - (songTime - recent.time) / HIT_EFFECT : 0
 
-      const radiusX = geo.laneWidth * (0.44 + punch * 0.12)
-      const radiusY = radiusX * 0.4
-      const press = held ? radiusY * 0.18 : 0
+      const radiusX = geo.laneWidth * (0.46 + punch * 0.1)
+      const radiusY = radiusX * 0.46
+      const press = held ? radiusY * 0.2 : 0
+      const aceso = held || punch > 0
 
-      // Base escura (o "poco" do traste).
+      // Poco escuro sob o traste: da relevo ao botao.
       this.alpha(1)
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.62)'
       ctx.beginPath()
-      ctx.ellipse(x, y + radiusY * 0.35, radiusX * 1.05, radiusY * 1.05, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, y + radiusY * 0.5, radiusX * 1.16, radiusY * 1.2, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Aro externo escuro.
+      ctx.fillStyle = 'rgba(10, 7, 4, 0.95)'
+      ctx.beginPath()
+      ctx.ellipse(x, y + press, radiusX * 1.1, radiusY * 1.12, 0, 0, Math.PI * 2)
       ctx.fill()
 
       // Miolo.
-      const fill = ctx.createRadialGradient(x, y - radiusY * 0.4 + press, 0, x, y + press, radiusX)
-      if (held || punch > 0) {
-        fill.addColorStop(0, lighten(color, 0.75))
-        fill.addColorStop(0.55, color)
-        fill.addColorStop(1, darken(color, 0.4))
+      const fill = ctx.createRadialGradient(
+        x,
+        y - radiusY * 0.5 + press,
+        radiusY * 0.08,
+        x,
+        y + press,
+        radiusX,
+      )
+      if (aceso) {
+        fill.addColorStop(0, '#ffffff')
+        fill.addColorStop(0.35, lighten(color, 0.6))
+        fill.addColorStop(1, darken(color, 0.3))
       } else {
-        fill.addColorStop(0, hexToRgba(color, 0.22))
-        fill.addColorStop(1, 'rgba(12, 8, 4, 0.85)')
+        fill.addColorStop(0, hexToRgba(color, 0.3))
+        fill.addColorStop(0.7, hexToRgba(color, 0.1))
+        fill.addColorStop(1, 'rgba(12, 8, 4, 0.9)')
       }
       ctx.fillStyle = fill
       ctx.beginPath()
       ctx.ellipse(x, y + press, radiusX, radiusY, 0, 0, Math.PI * 2)
       ctx.fill()
 
-      // Aro.
-      ctx.lineWidth = Math.max(2.5, radiusY * 0.34)
-      ctx.strokeStyle = held || punch > 0 ? lighten(color, 0.6) : color
-      if (options.effects !== 'low' && (held || punch > 0)) {
-        ctx.shadowBlur = 20 + punch * 24
+      // Anel colorido, grosso.
+      ctx.lineWidth = Math.max(2.8, radiusY * 0.42)
+      ctx.strokeStyle = aceso ? lighten(color, 0.55) : color
+      if (options.effects !== 'low' && aceso) {
+        ctx.shadowBlur = 22 + punch * 26
         ctx.shadowColor = color
       }
       ctx.stroke()
       ctx.shadowBlur = 0
+
+      // Reflexo no alto do botao.
+      this.alpha(aceso ? 0.7 : 0.35)
+      ctx.beginPath()
+      ctx.ellipse(x, y - radiusY * 0.34 + press, radiusX * 0.5, radiusY * 0.26, 0, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'
+      ctx.fill()
     }
   }
 

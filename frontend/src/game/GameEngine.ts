@@ -5,7 +5,14 @@ import { IntroSequence } from './IntroSequence'
 import { InputRouter } from './InputRouter'
 import { PlayerSession } from './PlayerSession'
 import { VideoEngine } from './VideoEngine'
-import type { BpmEvent, Chart, EngineSnapshot, GameAction, PlayerSnapshot } from './types'
+import type {
+  BpmEvent,
+  Chart,
+  EngineSnapshot,
+  GameAction,
+  HitEvent,
+  PlayerSnapshot,
+} from './types'
 import type { Settings } from '../settings/types'
 
 export interface GameEngineOptions {
@@ -21,6 +28,14 @@ export interface GameEngineOptions {
   onSnapshot: (snapshot: EngineSnapshot) => void
   onFinish: (players: PlayerSnapshot[]) => void
   onLoadProgress?: (done: number, total: number) => void
+  /**
+   * Cada nota resolvida do jogador local, em tempo real.
+   *
+   * Existe para o multiplayer: os outros desenham a faixa deste jogador em
+   * miniatura a partir destes eventos. O snapshot nao serve, porque ele e
+   * agregado e vem a ~15 Hz - nota individual se perderia.
+   */
+  onHit?: (event: HitEvent) => void
 }
 
 const SNAPSHOT_INTERVAL = 0.066 // ~15 Hz: HUD fluido sem re-render por frame
@@ -189,7 +204,10 @@ export class GameEngine {
         instrument: this.options.chart.instrument,
         difficulty: this.options.chart.difficulty,
         requireStrum: this.options.settings.gameplay.requireStrum,
-        onHit: () => this.setInstrumentMuted(false),
+        onHit: (event) => {
+          this.setInstrumentMuted(false)
+          this.options.onHit?.(event)
+        },
         onMiss: () => this.setInstrumentMuted(true),
         onOverstrum: () => this.setInstrumentMuted(true),
       }),

@@ -132,3 +132,52 @@ describe('ScoreReporter', () => {
     expect(spy).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('ScoreReporter — acertos para a faixa espelho', () => {
+  let sent: Array<Record<string, unknown>>
+  let reporter: ScoreReporter
+
+  beforeEach(() => {
+    sent = []
+    reporter = new ScoreReporter((payload) => sent.push(payload))
+  })
+
+  it('manda os acertos enfileirados junto do proximo placar', () => {
+    reporter.queueHit([1500, 2, 3])
+    reporter.queueHit([1620, 0, 1])
+    reporter.report(snapshot({ score: 100 }), 0)
+    expect(sent[0].hits).toEqual([[1500, 2, 3], [1620, 0, 1]])
+  })
+
+  it('um acerto justifica a mensagem mesmo sem mudanca de placar', () => {
+    reporter.report(snapshot({ score: 100 }), 0)
+    sent = []
+    reporter.queueHit([2000, 4, 2])
+    expect(reporter.report(snapshot({ score: 100 }), 1000)).toBe(true)
+    expect(sent).toEqual([{ hits: [[2000, 4, 2]] }])
+  })
+
+  it('a fila esvazia depois de enviada, sem repetir eventos', () => {
+    reporter.queueHit([100, 1, 3])
+    reporter.report(snapshot({ score: 10 }), 0)
+    sent = []
+    reporter.report(snapshot({ score: 20 }), 1000)
+    expect(sent[0].hits).toBeUndefined()
+  })
+
+  it('acertos no intervalo de throttle ficam guardados, nao somem', () => {
+    reporter.report(snapshot({ score: 10 }), 0)
+    sent = []
+    reporter.queueHit([100, 0, 3])
+    reporter.queueHit([150, 1, 3])
+    expect(reporter.report(snapshot({ score: 20 }), 50)).toBe(false)
+    reporter.report(snapshot({ score: 20 }), 100)
+    expect(sent[0].hits).toEqual([[100, 0, 3], [150, 1, 3]])
+  })
+
+  it('reset descarta acertos pendentes da partida anterior', () => {
+    reporter.queueHit([100, 0, 3])
+    reporter.reset()
+    expect(reporter.report(snapshot(), 1000)).toBe(false)
+  })
+})

@@ -103,7 +103,13 @@ export function Lobby({ mp, onBack, onPickSong, pickedSongId }: Props) {
 
       <div className="lobby">
         <div className="lobby-header">
-          <div className="lobby-title">LAN LOBBY</div>
+          <div className="lobby-title">LOBBY</div>
+          {room.code && (
+            <div className="lobby-code" title="Código para os outros entrarem">
+              <span className="lobby-code-label">CÓDIGO</span>
+              <span className="lobby-code-value">{room.code}</span>
+            </div>
+          )}
           <div className="lobby-status">
             <span className={`lobby-dot ${mp.connection}`} />
             {room.players.length}/{room.maxPlayers} jogadores

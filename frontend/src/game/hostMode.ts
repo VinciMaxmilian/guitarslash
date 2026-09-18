@@ -1,16 +1,17 @@
 /**
- * Deteccao de modo host.
+ * Onde fica o servidor de partidas.
  *
- * O multiplayer LAN sO existe quando a pagina esta sendo servida pelo processo
- * do host (`python main.py host`). No deploy publico (Netlify + Vercel) nao
- * existe WebSocket: Serverless Function nao mantem conexao aberta, e uma
- * pagina em HTTPS nao abre ws:// para um IP da rede local.
+ * Existem dois cenarios, e o mesmo build atende os dois:
  *
- * Como sabemos: o backend em modo host injeta `window.__GUITARSLASH_HOST__` no
- * index.html que ele serve (ver `_mount_frontend` em backend/app/main.py).
- * Isso importa porque o MESMO `frontend/dist` roda nos dois lugares - se a
- * deteccao dependesse de variavel de build, um dist buildado para o Netlify
- * tentaria falar com a Vercel mesmo rodando na LAN.
+ *   LAN (modo host)  o processo roda na maquina de um jogador e serve tambem
+ *                    esta pagina. O servidor injeta `window.__GUITARSLASH_HOST__`
+ *                    no index.html, e o WebSocket vai para a propria origem.
+ *
+ *   Online           o processo roda num servidor dedicado e o endereco vem de
+ *                    VITE_WS_URL, embutido no build.
+ *
+ * A Vercel nao serve para nenhum dos dois: Serverless Function nao mantem
+ * conexao WebSocket aberta. Nao e configuracao, e o modelo de execucao.
  */
 
 declare global {
@@ -26,11 +27,43 @@ function marked(): boolean {
 /** Em dev o proxy do Vite encaminha /api e /ws para o backend local. */
 const DEV = Boolean(import.meta.env?.DEV)
 
-/** Verdadeiro quando esta pagina tem um host de LAN na mesma origem. */
+/** Servidor de partidas online, quando houver. Vazio = nao configurado. */
+const WS_URL = (import.meta.env?.VITE_WS_URL ?? '').trim().replace(/\/$/, '')
+
+/** A pagina esta sendo servida pelo processo do host, na rede local. */
 export const IS_HOST_MODE = marked() || DEV
 
-/** URL do WebSocket da partida, sempre na origem da propria pagina. */
+/** Ha servidor de partidas online configurado neste build. */
+export const HAS_ONLINE_SERVER = WS_URL.length > 0
+
+/**
+ * Multiplayer disponivel nesta pagina.
+ *
+ * Em modo host e sempre LAN (a origem local ganha, mesmo que exista servidor
+ * online configurado): assim o modo host continua funcionando offline.
+ */
+export const MULTIPLAYER_AVAILABLE = IS_HOST_MODE || HAS_ONLINE_SERVER
+
+/** 'lan' | 'online' | null — para a interface explicar o que esta acontecendo. */
+export const MULTIPLAYER_KIND: 'lan' | 'online' | null = IS_HOST_MODE
+  ? 'lan'
+  : HAS_ONLINE_SERVER
+    ? 'online'
+    : null
+
+/** Converte http(s):// em ws(s)://, preservando caminho. */
+export function toWebSocketScheme(url: string): string {
+  if (url.startsWith('ws://') || url.startsWith('wss://')) return url
+  if (url.startsWith('https://')) return `wss://${url.slice('https://'.length)}`
+  if (url.startsWith('http://')) return `ws://${url.slice('http://'.length)}`
+  return url
+}
+
+/** URL do WebSocket da partida. */
 export function matchSocketUrl(): string {
+  if (!IS_HOST_MODE && WS_URL) {
+    return `${toWebSocketScheme(WS_URL)}/ws`
+  }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/ws`
 }

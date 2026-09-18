@@ -41,7 +41,9 @@ export function MainMenu({
       action: onMultiplayer,
       cls: 'menu-item-4',
       disabled: !multiplayerAvailable,
-      hint: multiplayerAvailable ? undefined : 'Rode o jogo em modo host para jogar na LAN',
+      hint: multiplayerAvailable
+        ? undefined
+        : 'Servidor de partidas nao configurado neste build (VITE_WS_URL) e a pagina nao vem de um host de LAN',
     },
     { label: 'TRAINING', action: undefined, cls: 'menu-item-5', disabled: true },
     { label: 'OPTIONS', action: onSettings, cls: 'menu-item-6', disabled: false },

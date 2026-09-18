@@ -4,15 +4,19 @@ Três alvos, com responsabilidades diferentes:
 
 | Alvo | O que roda lá | URL | Precisa de internet |
 |---|---|---|---|
-| **Netlify** | frontend (SPA do Vite) | <https://guitarslash.netlify.app> | sim |
-| **Vercel** | backend (FastAPI como Serverless Function) | <https://guitarslash.vercel.app> | sim |
-| **Modo host** | backend + frontend na mesma origem, na LAN | `http://<ip-da-lan>:8000` | **não** |
+| **Netlify** | frontend (SPA do Vite) + biblioteca | <https://guitarslash.netlify.app> | sim |
+| **Vercel** | API de músicas (Serverless Function) | <https://guitarslash.vercel.app> | sim |
+| **Servidor de partidas** | WebSocket do multiplayer online | um processo seu (ver Parte 4) | sim |
+| **Modo host** | tudo na mesma origem, na LAN | `http://<ip-da-lan>:8000` | **não** |
 
-O **multiplayer LAN só funciona no modo host**. Netlify e Vercel servem o
-singleplayer e a biblioteca pública. Isso não é limitação da implementação, é
-consequência da plataforma: Serverless Function não mantém conexão WebSocket
-aberta, e uma página servida por HTTPS não pode abrir `ws://` para um IP da
-rede local (mixed content bloqueado pelo navegador).
+Sobre o multiplayer: ele **não passa pela Vercel**, e isso não é configuração
+— Serverless Function não mantém conexão WebSocket aberta, é o modelo de
+execução. Existem dois caminhos, e o mesmo build atende os dois:
+
+- **online**: um processo rodando num servidor que aguenta conexão aberta
+  (Parte 4). O endereço vai em `VITE_WS_URL` no build do Netlify;
+- **LAN (modo host)**: um jogador roda o processo na própria máquina e os
+  outros abrem o IP dele. Funciona offline.
 
 Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
 
@@ -22,7 +26,7 @@ Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
 
 ```bash
 git status                  # trabalho commitado
-python main.py test         # 118 testes do backend
+python main.py test         # 133 testes do backend
 cd frontend && npm test     # 91 testes do frontend
 cd frontend && npm run build   # o build tem que passar localmente
 ```
@@ -455,6 +459,84 @@ Está documentado no código (`frontend/src/game/hostMode.ts`), mas vale repetir
 
 Por isso o botão MULTIPLAYER fica desabilitado no site público, com tooltip
 explicando. Não é bug.
+
+---
+
+## Parte 4 — Servidor de partidas (multiplayer online)
+
+O `/ws` precisa de um **processo de verdade**, que fique no ar mantendo
+conexões abertas. A Vercel não serve. Qualquer plataforma que rode um container
+serve: Railway, Render, Fly.io, Koyeb, uma VPS.
+
+O repositório já tem o `Dockerfile`. Ele roda o **mesmo `create_app`** da
+Vercel — não há um segundo backend para manter.
+
+### 4.1 Subir o container
+
+```bash
+docker build -t guitarslash-match .
+docker run -p 8000:8000   -e GUITARSLASH_STORAGE=remote   -e GUITARSLASH_ASSETS_BASE_URL=https://guitarslash.netlify.app   -e GUITARSLASH_ALLOWED_ORIGINS=https://guitarslash.netlify.app   guitarslash-match
+```
+
+Nas plataformas gerenciadas, aponte para o repositório e elas detectam o
+`Dockerfile` sozinhas. Defina as mesmas três variáveis de ambiente.
+
+### 4.2 Variáveis
+
+São as mesmas da Vercel (seção 1.3). `GUITARSLASH_ALLOWED_ORIGINS` é
+**obrigatória** aqui e vale mais do que lá:
+
+> WebSocket **não passa por CORS**. O navegador não protege essa conexão. Quem
+> valida a origem é o servidor, com essa lista. Sem ela configurada, qualquer
+> página na internet abre conexão com o seu servidor em nome de quem a visitar.
+
+Origem ausente (cliente nativo, `curl`, teste) passa: navegador **sempre** manda
+`Origin`, então a ausência não é um navegador tentando se disfarçar.
+
+### 4.3 Apontar o frontend
+
+No Netlify, **Site configuration → Environment variables**:
+
+```
+VITE_WS_URL = https://seu-servidor-de-partidas.exemplo.com
+```
+
+Aceita `https://` e converte para `wss://` sozinho. É lida em **build time**,
+então exige novo deploy.
+
+Sem essa variável, o botão MULTIPLAYER fica desabilitado no site — com tooltip
+explicando o motivo, em vez de dar erro ao clicar.
+
+### 4.4 Um processo, e só um
+
+As salas vivem na **memória do processo**. Com dois workers ou duas réplicas,
+dois jogadores com o mesmo código caem em salas diferentes e nunca se veem.
+
+- mantenha `--workers 1` (o `Dockerfile` já faz isso);
+- não ligue autoscaling para mais de uma instância;
+- se um dia precisar escalar, o estado tem que sair para fora (Redis), e aí o
+  `RoomRegistry` muda.
+
+Um processo aguenta 200 salas simultâneas (`MAX_ROOMS`), o que é bastante: são
+até 800 jogadores.
+
+### 4.5 Verificar
+
+```bash
+curl https://seu-servidor-de-partidas.exemplo.com/api/health
+```
+
+Depois, no jogo: **MULTIPLAYER → CRIAR**. Aparece um código de 4 caracteres.
+Abra outra aba, **MULTIPLAYER → ENTRAR**, digite o código. Os dois têm que
+aparecer na lista de jogadores.
+
+Se travar em "CONECTANDO":
+
+| Causa | Como confirmar |
+|---|---|
+| `VITE_WS_URL` errada ou ausente | console do navegador mostra a URL do WebSocket |
+| origem bloqueada | o servidor fecha com código 4403; veja os logs dele |
+| a plataforma não faz proxy de WebSocket | `curl` na `/api/health` funciona mas o `/ws` não conecta |
 
 ---
 

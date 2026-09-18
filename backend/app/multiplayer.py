@@ -1,11 +1,22 @@
-"""Servidor da partida LAN: sala unica, WebSocket, JSON tipado.
+"""Servidor da partida: salas identificadas por codigo, WebSocket, JSON tipado.
+
+Serve os dois cenarios com o mesmo codigo:
+
+    - LAN (modo host): um jogador roda o processo na propria maquina;
+    - online: o processo roda num servidor que aguenta conexao aberta
+      (Serverless Function NAO aguenta, por isso nao e a Vercel).
+
+A diferenca entre os dois e so onde o processo roda. Por isso as salas tem
+CODIGO: na LAN daria para ter uma sala unica, mas online todo mundo abriria a
+mesma sala de 4 lugares.
 
 Regras que este modulo assume (e que o resto do jogo depende):
 
     - o host e a fonte da verdade do LOBBY (quem esta na sala, qual musica,
       qual modo, quando comeca);
-    - cada cliente e a fonte da verdade do PROPRIO score. O host nao valida
-      nada: LAN entre amigos, sem anti-cheat;
+    - cada cliente e a fonte da verdade do PROPRIO score. O servidor nao
+      valida placar: sem anti-cheat, por decisao de projeto. O codigo de sala
+      e privacidade, nao seguranca;
     - a sincronia audio/nota nunca depende da rede. A rede so carrega estado
       de sala, um timestamp de inicio e placar em baixa frequencia.
 
@@ -19,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 import uuid
 from dataclasses import dataclass
@@ -48,6 +60,27 @@ COUNTDOWN_MS = 3000
 
 NAME_MAX = 24
 
+#: Acertos acumulados por jogador entre dois broadcasts de placar.
+#:
+#: Servem para os OUTROS desenharem a faixa dele em miniatura. Nao mandamos a
+#: faixa pela rede: todo mundo toca a mesma musica, entao cada cliente ja tem o
+#: chart e so precisa saber o que o outro acertou. Sao ~13 notas por segundo,
+#: entao cada flush a 10 Hz leva pouco mais de uma nota.
+MAX_HITS_PER_FLUSH = 64
+
+#: Alfabeto do codigo de sala: sem O/0 e I/1, que as pessoas confundem ao
+#: ditar o codigo por voz.
+CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+CODE_LENGTH = 4
+
+#: Teto de salas simultaneas no processo. Online qualquer um abre conexao;
+#: sem teto, criar salas vazias em loop consome memoria do servidor.
+MAX_ROOMS = 200
+
+#: Sala sem ninguem dentro e descartada; este prazo cobre o caso do jogador
+#: que recarrega a pagina e volta para a mesma sala.
+EMPTY_ROOM_TTL = 120.0
+
 
 def now_ms() -> int:
     """Relogio de parede em ms. E o relogio que vai dentro do START_AT."""
@@ -57,6 +90,9 @@ def now_ms() -> int:
 class ErrorCode:
     PROTOCOL = "PROTOCOL_VERSION"
     ROOM_FULL = "ROOM_FULL"
+    ROOM_NOT_FOUND = "ROOM_NOT_FOUND"
+    TOO_MANY_ROOMS = "TOO_MANY_ROOMS"
+    FORBIDDEN_ORIGIN = "FORBIDDEN_ORIGIN"
     NOT_HOST = "NOT_HOST"
     ALREADY_JOINED = "ALREADY_JOINED"
     BAD_PAYLOAD = "BAD_PAYLOAD"
@@ -140,6 +176,8 @@ class PlayerSession:
         self.ready = False
         self.load_progress = 0.0
         self.score = ScoreState()
+        #: [tempoMs, lane, codigoDoJulgamento] desde o ultimo flush.
+        self.recent_hits: list[list[int]] = []
         self.finished = False
         self.connected = True
         #: Espectador nao bloqueia o inicio: entrou com a partida rolando.
@@ -158,6 +196,29 @@ class PlayerSession:
         self.load_progress = 0.0
         self.finished = False
         self.score = ScoreState()
+        self.recent_hits.clear()
+
+    def queue_hits(self, raw: Any) -> None:
+        """Guarda acertos ate o proximo broadcast agregado.
+
+        Formato compacto de proposito: [[tempoMs, lane, julgamento], ...].
+        Lixo e descartado em silencio - o cliente nao e confiavel, mas tambem
+        nao vale derrubar a partida por um payload torto.
+        """
+        if not isinstance(raw, list):
+            return
+        for item in raw[:MAX_HITS_PER_FLUSH]:
+            if not isinstance(item, (list, tuple)) or len(item) < 3:
+                continue
+            try:
+                tempo, lane, julgamento = int(item[0]), int(item[1]), int(item[2])
+            except (TypeError, ValueError):
+                continue
+            if 0 <= lane < 5 and 0 <= julgamento <= 3:
+                self.recent_hits.append([tempo, lane, julgamento])
+        # Cliente travado nao pode fazer a lista crescer sem fim.
+        if len(self.recent_hits) > MAX_HITS_PER_FLUSH:
+            del self.recent_hits[:-MAX_HITS_PER_FLUSH]
 
     def to_dict(self, host_id: str | None) -> dict:
         return {
@@ -181,9 +242,10 @@ def _tiebreak(player: PlayerSession) -> tuple:
 
 
 class Room:
-    """Sala unica. O modo host serve uma partida por processo."""
+    """Uma partida. Identificada por um codigo curto que os jogadores digitam."""
 
-    def __init__(self) -> None:
+    def __init__(self, code: str = "LOCAL") -> None:
+        self.code = code
         self.players: list[PlayerSession] = []
         self.mode: str = "versus"
         self.song_id: str | None = None
@@ -194,6 +256,8 @@ class Room:
         self._scoreboard_dirty = False
         self._ticker: asyncio.Task | None = None
         self._load_deadline: float | None = None
+        #: Quando a sala ficou vazia. O registry descarta depois do TTL.
+        self.empty_since: float | None = time.monotonic()
 
     # ------------------------------------------------------------------ estado
 
@@ -212,6 +276,7 @@ class Room:
     def to_dict(self) -> dict:
         host_id = self.host_id
         return {
+            "code": self.code,
             "phase": self.phase,
             "mode": self.mode,
             "songId": self.song_id,
@@ -255,18 +320,27 @@ class Room:
     def mark_scoreboard_dirty(self) -> None:
         self._scoreboard_dirty = True
 
-    def scoreboard(self) -> dict:
-        players = [
-            {
+    def scoreboard(self, *, drain: bool = False) -> dict:
+        """Placar agregado.
+
+        `drain=True` consome os acertos acumulados: use so no broadcast de
+        verdade, senao dois leitores competiriam pelos mesmos eventos.
+        """
+        players = []
+        for p in self.players:
+            if p.spectator:
+                continue
+            linha = {
                 "id": p.id,
                 "name": p.name,
                 "connected": p.connected,
                 "finished": p.finished,
+                "hits": list(p.recent_hits),
                 **p.score.to_dict(),
             }
-            for p in self.players
-            if not p.spectator
-        ]
+            if drain:
+                p.recent_hits.clear()
+            players.append(linha)
         payload: dict = {"players": players}
         if self.mode == "coop":
             # Co-op: o BAND SCORE e a soma, inclusive de quem caiu (o score
@@ -370,6 +444,7 @@ class Room:
         # "todos prontos" travaria o inicio (ou o fim) da musica.
         player.spectator = self.phase in ("loading", "playing")
         self.players.append(player)
+        self.empty_since = None
         self._ensure_ticker()
         await self.send_state()
 
@@ -386,6 +461,7 @@ class Room:
             self.phase = "lobby"
             self.song_id = None
             self.start_at = None
+            self.empty_since = time.monotonic()
             self._stop_ticker()
             return
 
@@ -421,7 +497,7 @@ class Room:
                     await self.reap()
                     if self._scoreboard_dirty and self.phase == "playing":
                         self._scoreboard_dirty = False
-                        await self.broadcast("SCOREBOARD", self.scoreboard())
+                        await self.broadcast("SCOREBOARD", self.scoreboard(drain=True))
                     if self._load_deadline and time.monotonic() > self._load_deadline:
                         logger.warning("timeout de carregamento; comecando sem todo mundo")
                         await self.start_if_loaded(force=True)
@@ -438,18 +514,81 @@ class Room:
             await self.remove(player)
 
 
-ROOM = Room()
+class RoomRegistry:
+    """Todas as salas do processo, por codigo.
+
+    Uma instancia so. Se o servidor rodar com MAIS DE UM processo (worker ou
+    replica), cada um tera o proprio registry e dois jogadores com o mesmo
+    codigo podem cair em salas diferentes. Rode com um processo, ou ponha
+    sticky session na frente. Ver DEPLOY.md.
+    """
+
+    def __init__(self) -> None:
+        self.rooms: dict[str, Room] = {}
+
+    def _new_code(self) -> str | None:
+        for _ in range(50):
+            code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+            if code not in self.rooms:
+                return code
+        return None
+
+    def create(self) -> Room | None:
+        """Sala nova com codigo inedito, ou None se o processo estiver cheio."""
+        self.discard_expired()
+        if len(self.rooms) >= MAX_ROOMS:
+            return None
+        code = self._new_code()
+        if code is None:
+            return None
+        room = Room(code)
+        self.rooms[code] = room
+        logger.info("sala criada: %s (%d ativas)", code, len(self.rooms))
+        return room
+
+    def get(self, code: str) -> Room | None:
+        return self.rooms.get(normalize_code(code))
+
+    def discard_expired(self) -> int:
+        """Remove salas vazias ha mais tempo que EMPTY_ROOM_TTL."""
+        agora = time.monotonic()
+        mortas = [
+            code
+            for code, room in self.rooms.items()
+            if not room.players
+            and room.empty_since is not None
+            and agora - room.empty_since > EMPTY_ROOM_TTL
+        ]
+        for code in mortas:
+            self.rooms.pop(code)._stop_ticker()
+        if mortas:
+            logger.info("salas descartadas: %s", ", ".join(mortas))
+        return len(mortas)
+
+    def clear(self) -> None:
+        for room in self.rooms.values():
+            room._stop_ticker()
+        self.rooms.clear()
 
 
-def get_room() -> Room:
-    return ROOM
+def normalize_code(raw: Any) -> str:
+    """Codigo digitado pelo jogador -> forma canonica.
+
+    Aceita minuscula e espacos, porque a pessoa vai digitar o que ouviu.
+    """
+    return "".join(str(raw or "").split()).upper()
 
 
-def reset_room() -> None:
+REGISTRY = RoomRegistry()
+
+
+def get_registry() -> RoomRegistry:
+    return REGISTRY
+
+
+def reset_registry() -> None:
     """Usado pelos testes: derruba o estado global entre casos."""
-    global ROOM
-    ROOM._stop_ticker()
-    ROOM = Room()
+    REGISTRY.clear()
 
 
 async def _handle(room: Room, player: PlayerSession, msg_type: str, payload: dict) -> bool:
@@ -537,6 +676,7 @@ async def _handle(room: Room, player: PlayerSession, msg_type: str, payload: dic
 
     elif msg_type == "SCORE_UPDATE":
         player.score.apply(payload)
+        player.queue_hits(payload.get("hits"))
         # Nao faz broadcast aqui: o ticker agrega e manda a SCOREBOARD_HZ.
         room.mark_scoreboard_dirty()
 
@@ -552,7 +692,7 @@ async def _handle(room: Room, player: PlayerSession, msg_type: str, payload: dic
         player.score.apply(payload)
         player.finished = True
         room.mark_scoreboard_dirty()
-        await room.broadcast("SCOREBOARD", room.scoreboard())
+        await room.broadcast("SCOREBOARD", room.scoreboard(drain=True))
         await room.finish_if_done()
 
     elif msg_type == "RETURN_TO_LOBBY":
@@ -579,10 +719,57 @@ async def _reject(websocket: WebSocket, code: str, message: str) -> None:
         pass
 
 
+def origin_allowed(origin: str | None, allowed: Iterable[str], host: str | None = None) -> bool:
+    """WebSocket nao passa por CORS: a checagem de origem e nossa.
+
+    Sem isto, qualquer pagina na internet abre conexao com o servidor de
+    partidas em nome de quem estiver visitando.
+
+    Tres casos passam:
+
+    1. Origem ausente: o navegador SEMPRE manda Origin, entao a ausencia e
+       cliente nativo/curl/teste, e nao um navegador se disfarcando.
+    2. MESMA ORIGEM do proprio servidor. E o modo host: o jogador abre
+       http://192.168.0.42:8000 e esse vira o Origin dele. Esse endereco nunca
+       estaria numa lista fixa, porque o IP da LAN muda de rede para rede - e
+       sem esta regra o multiplayer LAN simplesmente nao conectaria.
+    3. Origem na lista configurada (GUITARSLASH_ALLOWED_ORIGINS).
+    """
+    if origin is None:
+        return True
+
+    permitidas = tuple(allowed)
+    if "*" in permitidas:
+        return True
+
+    if host and _origin_host(origin) == host.strip().lower():
+        return True
+
+    return origin.rstrip("/") in {o.rstrip("/") for o in permitidas}
+
+
+def _origin_host(origin: str) -> str:
+    """"http://192.168.0.42:8000" -> "192.168.0.42:8000"."""
+    sem_esquema = origin.split("://", 1)[-1]
+    return sem_esquema.split("/", 1)[0].strip().lower()
+
+
+def _allowed_origins(websocket: WebSocket) -> tuple[str, ...]:
+    settings = getattr(websocket.app.state, "settings", None)
+    return tuple(getattr(settings, "allowed_origins", ()) or ())
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
+    origem = websocket.headers.get("origin")
+    if not origin_allowed(origem, _allowed_origins(websocket), websocket.headers.get("host")):
+        logger.warning("conexao recusada por origem: %s", origem)
+        await websocket.close(code=4403)
+        return
+
     await websocket.accept()
-    room = get_room()
+    registry = get_registry()
+    room: Room | None = None
     player: PlayerSession | None = None
 
     try:
@@ -618,7 +805,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 continue
 
             if msg_type == "JOIN":
-                if player is not None:
+                if player is not None and room is not None:
                     async with room.lock:
                         await room.send_error(
                             player, ErrorCode.ALREADY_JOINED, "Ja entrou na sala."
@@ -628,16 +815,38 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await _reject(
                         websocket,
                         ErrorCode.PROTOCOL,
-                        "Versao de protocolo incompativel. O host fala a versao "
-                        f"{PROTOCOL_VERSION}. Recarregue a pagina do host.",
+                        "Versao de protocolo incompativel. O servidor fala a versao "
+                        f"{PROTOCOL_VERSION}. Recarregue a pagina.",
                     )
                     return
+
+                # Sem codigo = criar sala. Com codigo = entrar na existente.
+                pedido = normalize_code(payload.get("roomCode"))
+                if pedido:
+                    room = registry.get(pedido)
+                    if room is None:
+                        await _reject(
+                            websocket,
+                            ErrorCode.ROOM_NOT_FOUND,
+                            f"Nao existe sala com o codigo {pedido}.",
+                        )
+                        return
+                else:
+                    room = registry.create()
+                    if room is None:
+                        await _reject(
+                            websocket,
+                            ErrorCode.TOO_MANY_ROOMS,
+                            "O servidor esta com salas demais. Tente em instantes.",
+                        )
+                        return
+
                 async with room.lock:
                     if len(room.players) >= MAX_PLAYERS:
                         await _reject(
                             websocket,
                             ErrorCode.ROOM_FULL,
-                            f"A sala esta cheia ({MAX_PLAYERS} jogadores).",
+                            f"A sala {room.code} esta cheia ({MAX_PLAYERS} jogadores).",
                         )
                         return
                     player = PlayerSession(websocket, _clean_name(payload.get("name"), "Player"))
@@ -649,6 +858,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "WELCOME",
                         {
                             "playerId": player.id,
+                            "roomCode": room.code,
                             "protocol": PROTOCOL_VERSION,
                             "serverTime": now_ms(),
                             "maxPlayers": MAX_PLAYERS,
@@ -658,7 +868,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await room.add(player)
                 continue
 
-            if player is None:
+            if player is None or room is None:
                 continue
 
             async with room.lock:
@@ -671,6 +881,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except Exception:
         logger.exception("erro no websocket da partida")
     finally:
-        if player is not None:
+        if player is not None and room is not None:
             async with room.lock:
                 await room.remove(player)
+        registry.discard_expired()

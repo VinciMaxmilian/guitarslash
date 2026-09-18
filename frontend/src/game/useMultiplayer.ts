@@ -32,6 +32,8 @@ const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000]
 
 export interface MultiplayerSession {
   room: MPRoom | null
+  /** Codigo da sala em que estamos, para mostrar e compartilhar. */
+  roomCode: string | null
   /** Placar agregado. Fica fora de `room` para o lobby nao re-renderizar. */
   scoreboard: MPScoreboard | null
   results: MPResults | null
@@ -61,8 +63,17 @@ export interface MultiplayerSession {
   clearResults: () => void
 }
 
-export function useMultiplayer(playerName: string, enabled: boolean): MultiplayerSession {
+/**
+ * @param joinCode codigo da sala a entrar. Vazio/undefined = CRIAR sala nova e
+ *                 receber o codigo do servidor.
+ */
+export function useMultiplayer(
+  playerName: string,
+  enabled: boolean,
+  joinCode?: string,
+): MultiplayerSession {
   const [room, setRoom] = useState<MPRoom | null>(null)
+  const [roomCode, setRoomCode] = useState<string | null>(null)
   const [scoreboard, setScoreboard] = useState<MPScoreboard | null>(null)
   const [results, setResults] = useState<MPResults | null>(null)
   const [error, setError] = useState<MPError | null>(null)
@@ -81,6 +92,10 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
   // socket: renomear e uma mensagem, nao uma reconexao.
   const nameRef = useRef(playerName)
   nameRef.current = playerName
+  // O codigo tambem vive num ref: ele so importa no instante do JOIN, e
+  // mudar o texto digitado nao deve derrubar a conexao.
+  const joinCodeRef = useRef(joinCode)
+  joinCodeRef.current = joinCode
 
   const send = useCallback((type: string, payload: unknown = {}) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
@@ -96,6 +111,7 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
   useEffect(() => {
     if (!enabled) {
       setRoom(null)
+      setRoomCode(null)
       setScoreboard(null)
       setResults(null)
       setError(null)
@@ -135,7 +151,12 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
         socket?.send(
           JSON.stringify({
             type: 'JOIN',
-            payload: { name: nameRef.current, version: PROTOCOL_VERSION },
+            payload: {
+              name: nameRef.current,
+              version: PROTOCOL_VERSION,
+              // Sem codigo o servidor cria a sala e devolve o codigo no WELCOME.
+              roomCode: joinCodeRef.current || undefined,
+            },
           }),
         )
         // Rajada de pings antes de qualquer coisa acontecer: o START_AT pode
@@ -163,6 +184,9 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
         switch (message.type) {
           case 'WELCOME':
             setSelfId(payload.playerId ?? null)
+            setRoomCode(payload.roomCode ?? null)
+            // Reconexao volta para a MESMA sala, e nao para uma nova.
+            joinCodeRef.current = payload.roomCode ?? joinCodeRef.current
             break
           case 'ROOM_STATE':
             setRoom(payload as MPRoom)
@@ -270,9 +294,51 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
 
   const isHost = Boolean(selfId && room?.hostId === selfId)
 
+  // Cada acao tem identidade ESTAVEL (depende so de `send`, que nunca muda).
+  //
+  // Isto nao e microtuning: o objeto devolvido por este hook e recriado a cada
+  // atualizacao de placar (10 Hz). Se as acoes fossem arrow functions inline,
+  // todo efeito que dependesse de uma delas re-rodaria 10 vezes por segundo -
+  // foi assim que a musica tocou o som de inicio em loop e que o ScoreReporter
+  // era recriado o tempo todo, zerando o proprio throttle.
+  const setName = useCallback((name: string) => send('SET_NAME', { name }), [send])
+  const setInstrument = useCallback(
+    (instrument: string) => send('SET_INSTRUMENT', { instrument }),
+    [send],
+  )
+  const setDifficulty = useCallback(
+    (difficulty: string) => send('SET_DIFFICULTY', { difficulty }),
+    [send],
+  )
+  const setReady = useCallback((ready: boolean) => send('SET_READY', { ready }), [send])
+  const setMode = useCallback((mode: string) => send('SET_MODE', { mode }), [send])
+  const selectSong = useCallback(
+    (songId: string, mode?: string) => send('SELECT_SONG', { songId, mode }),
+    [send],
+  )
+  const reportLoadProgress = useCallback(
+    (progress: number) => send('LOAD_PROGRESS', { progress }),
+    [send],
+  )
+  const reportScore = useCallback(
+    (state: Record<string, unknown>) => send('SCORE_UPDATE', state),
+    [send],
+  )
+  const reportFinished = useCallback(
+    (state: Record<string, unknown>) => send('FINISHED', state),
+    [send],
+  )
+  const reportStarPower = useCallback(
+    (active: boolean) => send('STAR_POWER', { active }),
+    [send],
+  )
+  const returnToLobby = useCallback(() => send('RETURN_TO_LOBBY'), [send])
+  const clearResults = useCallback(() => setResults(null), [])
+
   return useMemo<MultiplayerSession>(
     () => ({
       room,
+      roomCode,
       scoreboard,
       results,
       error,
@@ -285,21 +351,22 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
       msUntilStart,
       self,
       isHost,
-      setName: (name: string) => send('SET_NAME', { name }),
-      setInstrument: (instrument: string) => send('SET_INSTRUMENT', { instrument }),
-      setDifficulty: (difficulty: string) => send('SET_DIFFICULTY', { difficulty }),
-      setReady: (ready: boolean) => send('SET_READY', { ready }),
-      setMode: (mode: string) => send('SET_MODE', { mode }),
-      selectSong: (songId: string, mode?: string) => send('SELECT_SONG', { songId, mode }),
-      reportLoadProgress: (progress: number) => send('LOAD_PROGRESS', { progress }),
-      reportScore: (state: Record<string, unknown>) => send('SCORE_UPDATE', state),
-      reportFinished: (state: Record<string, unknown>) => send('FINISHED', state),
-      reportStarPower: (active: boolean) => send('STAR_POWER', { active }),
-      returnToLobby: () => send('RETURN_TO_LOBBY'),
-      clearResults: () => setResults(null),
+      setName,
+      setInstrument,
+      setDifficulty,
+      setReady,
+      setMode,
+      selectSong,
+      reportLoadProgress,
+      reportScore,
+      reportFinished,
+      reportStarPower,
+      returnToLobby,
+      clearResults,
     }),
     [
       room,
+      roomCode,
       scoreboard,
       results,
       error,
@@ -312,7 +379,18 @@ export function useMultiplayer(playerName: string, enabled: boolean): Multiplaye
       msUntilStart,
       self,
       isHost,
-      send,
+      setName,
+      setInstrument,
+      setDifficulty,
+      setReady,
+      setMode,
+      selectSong,
+      reportLoadProgress,
+      reportScore,
+      reportFinished,
+      reportStarPower,
+      returnToLobby,
+      clearResults,
     ],
   )
 }

@@ -10,13 +10,23 @@ import { Result } from './pages/Result'
 import { SettingsScreen } from './pages/SettingsScreen'
 import { SongSelect } from './pages/SongSelect'
 import { Lobby } from './pages/Lobby'
+import { MultiplayerStart } from './pages/MultiplayerStart'
 import type { PlayerSnapshot, Chart } from './game/types'
 import { useBackgroundMusic } from './hooks/useBackgroundMusic'
 import { useSettings } from './hooks/useSettings'
 import { useMultiplayer } from './game/useMultiplayer'
-import { IS_HOST_MODE } from './game/hostMode'
+import { MULTIPLAYER_AVAILABLE } from './game/hostMode'
 
-type Screen = 'menu' | 'settings' | 'songs' | 'instrument' | 'difficulty' | 'game' | 'result' | 'lobby'
+type Screen =
+  | 'menu'
+  | 'settings'
+  | 'songs'
+  | 'instrument'
+  | 'difficulty'
+  | 'game'
+  | 'result'
+  | 'mp-start'
+  | 'lobby'
 
 export function App() {
   const settings = useSettings()
@@ -24,6 +34,8 @@ export function App() {
   const [song, setSong] = useState<SongSummary | null>(null)
   const [instrument, setInstrument] = useState<string | null>(null)
   const [multiplayer, setMultiplayer] = useState(false)
+  //: undefined = criar sala nova; string = entrar na sala com esse codigo.
+  const [joinCode, setJoinCode] = useState<string | undefined>(undefined)
   const [selection, setSelection] = useState<{
     song: SongSummary
     instrument: string
@@ -31,7 +43,7 @@ export function App() {
   } | null>(null)
 
   const [results, setResults] = useState<{ players: PlayerSnapshot[]; chart: Chart } | null>(null)
-  const mp = useMultiplayer(settings.profileName || 'Player', multiplayer)
+  const mp = useMultiplayer(settings.profileName || 'Player', multiplayer, joinCode)
   //: Evita entrar duas vezes na mesma partida quando o BEGIN_LOAD se repete.
   const loadedFor = useRef<string | null>(null)
 
@@ -77,8 +89,16 @@ export function App() {
   const leaveMultiplayer = useCallback(() => {
     loadedFor.current = null
     setMultiplayer(false)
+    setJoinCode(undefined)
     setResults(null)
     setScreen('menu')
+  }, [])
+
+  const abrirLobby = useCallback((code?: string) => {
+    loadedFor.current = null
+    setJoinCode(code)
+    setMultiplayer(true)
+    setScreen('lobby')
   }, [])
 
   const backFromGame = useCallback(() => {
@@ -90,22 +110,26 @@ export function App() {
     <>
       {screen === 'menu' && (
         <MainMenu
-          multiplayerAvailable={IS_HOST_MODE}
+          multiplayerAvailable={MULTIPLAYER_AVAILABLE}
           onPlay={() => {
             setMultiplayer(false)
             loadedFor.current = null
             setScreen('songs')
           }}
           onSettings={() => setScreen('settings')}
-          onMultiplayer={() => {
-            loadedFor.current = null
-            setMultiplayer(true)
-            setScreen('lobby')
-          }}
+          onMultiplayer={() => setScreen('mp-start')}
         />
       )}
 
       {screen === 'settings' && <SettingsScreen onBack={() => setScreen('menu')} />}
+
+      {screen === 'mp-start' && (
+        <MultiplayerStart
+          onCreate={() => abrirLobby(undefined)}
+          onJoin={(code) => abrirLobby(code)}
+          onBack={() => setScreen('menu')}
+        />
+      )}
 
       {screen === 'lobby' && (
         <Lobby
