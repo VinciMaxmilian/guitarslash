@@ -4,6 +4,7 @@ import { HighwayRenderer } from './HighwayRenderer'
 import { IntroSequence } from './IntroSequence'
 import { InputRouter } from './InputRouter'
 import { PlayerSession } from './PlayerSession'
+import { audioStartDelay, chartDuration, chartTime } from './songClock'
 import { VideoEngine } from './VideoEngine'
 import type {
   BpmEvent,
@@ -114,7 +115,10 @@ export class GameEngine {
   start(): void {
     if (this.started) return
     this.started = true
-    this.audio.scheduleStart(IntroSequence.leadIn)
+    // O audio comeca antes para que songTime (= audio - delay) chegue em
+    // -leadIn no inicio da intro. Sem descontar o delay, a contagem
+    // regressiva ficaria mais longa que o previsto exatamente nessas musicas.
+    this.audio.scheduleStart(audioStartDelay(IntroSequence.leadIn, this.options.songDelay))
     this.input.attach()
     this.lastFrameTime = performance.now() / 1000
     this.rafId = requestAnimationFrame(this.loop)
@@ -178,16 +182,33 @@ export class GameEngine {
 
   // ------------------------------------------------------------------ estado
 
+  /**
+   * Tempo do CHART. E contra ele que as notas sao posicionadas e julgadas.
+   *
+   * `songDelay` e o `delay` do song.ini e SUBTRAI: um delay positivo significa
+   * que o audio tem uma entrada antes do chart comecar, entao o chart zero
+   * acontece `delay` segundos DENTRO do audio. Somar (como era antes) fazia o
+   * chart correr adiantado - em Paint It Black, com delay de 3,778 s, as notas
+   * chegavam 3,778 s antes do som e as primeiras eram inalcancaveis.
+   */
   get songTime(): number {
-    return (
-      this.audio.currentTime +
-      this.options.settings.calibration.audioOffsetMs / 1000 +
-      this.options.songDelay
+    return chartTime(
+      this.audio.currentTime,
+      this.options.settings.calibration.audioOffsetMs,
+      this.options.songDelay,
     )
   }
 
+  /** Duracao em tempo de CHART, que e a escala de `songTime`. */
   get duration(): number {
-    return Math.max(this.options.chart.length, this.audio.duration)
+    // O audio precisa descontar o delay: o fim dele, em tempo de chart, vem
+    // `delay` segundos antes. Sem isto a musica com delay nunca terminava,
+    // porque songTime nao alcancava a condicao de fim.
+    return chartDuration(
+      this.options.chart.length,
+      this.audio.duration,
+      this.options.songDelay,
+    )
   }
 
   /** True quando o navegador ainda exige um clique para liberar o audio. */
