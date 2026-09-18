@@ -22,6 +22,11 @@ export interface SongSummary {
   charter: string | null
   duration: number
   previewStart: number
+  /** 'community' = veio do Supabase; ausente/'local' = pasta songs/. */
+  source?: 'local' | 'community'
+  /** Caminho do notes.mid no bucket. So em musica da comunidade. */
+  chartPath?: string
+  uploaderId?: string
   delay: number
   hasBackgroundVideo: boolean
   hasCover: boolean

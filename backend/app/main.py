@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api.community import router as community_router
 from .api.songs import router as songs_router
 from .multiplayer import router as multiplayer_router
 from .config import ROOT, Settings, load_settings
@@ -55,6 +56,7 @@ def create_app(settings: Settings | None = None, serve_frontend: bool = False) -
     )
 
     app.include_router(songs_router)
+    app.include_router(community_router)
     app.include_router(multiplayer_router)
 
     @app.get("/api/health", tags=["health"])

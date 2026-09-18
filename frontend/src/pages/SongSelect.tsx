@@ -9,17 +9,25 @@ import { useSettings } from '../hooks/useSettings'
 import { formatNumber } from '../utils/format'
 import { useUISounds } from '../hooks/useUISounds'
 import { backgroundStem } from '../game/backgroundPlaylist'
+import { fetchCommunitySongs } from '../community/communitySongs'
+import { CLOUD_ENABLED } from '../lib/supabase'
 
 interface Props {
   onBack: () => void
   onSelect: (song: SongSummary) => void
+  /** Abre a tela de envio. Ausente = sem conta ou sem nuvem. */
+  onUpload?: () => void
 }
 
-export function SongSelect({ onBack, onSelect }: Props) {
+type Aba = 'principais' | 'comunidade'
+
+export function SongSelect({ onBack, onSelect, onUpload }: Props) {
   const settings = useSettings()
   const [library, setLibrary] = useState<LibraryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [aba, setAba] = useState<Aba>('principais')
+  const [comunidade, setComunidade] = useState<SongSummary[] | null>(null)
   const previewRef = useRef<HTMLAudioElement | null>(null)
   const uiSounds = useUISounds()
 
@@ -39,7 +47,24 @@ export function SongSelect({ onBack, onSelect }: Props) {
     return () => stopPreview(previewRef)
   }, [])
 
-  const songs = library?.songs ?? []
+  // A comunidade so e buscada quando a aba e aberta: quem joga so as proprias
+  // musicas nao paga uma consulta ao banco por abrir a lista.
+  useEffect(() => {
+    if (aba !== 'comunidade' || comunidade !== null || !CLOUD_ENABLED) return
+    void fetchCommunitySongs().then(setComunidade)
+  }, [aba, comunidade])
+
+  const songs = useMemo(
+    () => (aba === 'comunidade' ? (comunidade ?? []) : (library?.songs ?? [])),
+    [aba, comunidade, library],
+  )
+
+  // Trocar de aba precisa mover a selecao: o id da aba anterior nao existe aqui.
+  useEffect(() => {
+    setSelectedId((atual) =>
+      songs.some((s) => s.id === atual) ? atual : (songs.find(isPlayable)?.id ?? null),
+    )
+  }, [songs])
 
   const selected = useMemo(
     () => songs.find((song) => song.id === selectedId) ?? null,
@@ -139,10 +164,63 @@ export function SongSelect({ onBack, onSelect }: Props) {
       )}
 
       <div className="song-list-scroll">
+        {CLOUD_ENABLED && (
+          <div className="sl-tabs">
+            <button
+              className={`sl-tab ${aba === 'principais' ? 'ativa' : ''}`}
+              onClick={() => {
+                uiSounds.play('scroll')
+                setAba('principais')
+              }}
+            >
+              PRINCIPAIS
+            </button>
+            <button
+              className={`sl-tab ${aba === 'comunidade' ? 'ativa' : ''}`}
+              onClick={() => {
+                uiSounds.play('scroll')
+                setAba('comunidade')
+              }}
+            >
+              COMUNIDADE
+            </button>
+            {onUpload && (
+              <button
+                className="sl-tab enviar"
+                onClick={() => {
+                  uiSounds.play('select')
+                  onUpload()
+                }}
+              >
+                + ENVIAR
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="song-list-title">
-          <span>{library ? `${library.count} MÚSICA(S)` : 'CARREGANDO...'}</span>
-          <button style={{fontSize: 16, cursor: 'pointer', fontFamily: "'Archivo Black', sans-serif", color: '#7e8a75'}} onClick={() => load(true)}>RESCANE</button>
+          <span>
+            {aba === 'comunidade'
+              ? comunidade === null
+                ? 'CARREGANDO...'
+                : `${comunidade.length} MÚSICA(S) DA COMUNIDADE`
+              : library
+                ? `${library.count} MÚSICA(S)`
+                : 'CARREGANDO...'}
+          </span>
+          {aba === 'principais' ? (
+            <button className="sl-acao" onClick={() => load(true)}>RESCANE</button>
+          ) : (
+            <button className="sl-acao" onClick={() => setComunidade(null)}>ATUALIZAR</button>
+          )}
         </div>
+
+        {aba === 'comunidade' && comunidade?.length === 0 && (
+          <div className="sl-vazio">
+            Nenhuma música da comunidade ainda.
+            {onUpload ? ' Seja o primeiro a enviar.' : ' Entre com uma conta para enviar a sua.'}
+          </div>
+        )}
 
         {songs.map((song) => (
           <div

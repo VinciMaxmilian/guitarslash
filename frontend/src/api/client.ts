@@ -61,6 +61,29 @@ export function resolveAssetUrl(url: string | null | undefined): string | null {
 }
 
 export const api = {
+  /**
+   * Chart de uma musica, venha ela da pasta local ou da comunidade.
+   *
+   * Os dois casos batem no MESMO parser no backend. Parsear MIDI no navegador
+   * criaria um segundo parser, e chart lido diferente entre jogadores e
+   * dessincronia na partida.
+   */
+  chartFor: (song: SongSummary, instrument: string, difficulty: string) =>
+    song.source === 'community' && song.chartPath
+      ? request<Chart>(
+          `/api/community/chart?path=${encodeURIComponent(song.chartPath)}` +
+            `&instrument=${encodeURIComponent(instrument)}` +
+            `&difficulty=${encodeURIComponent(difficulty)}`,
+        )
+      : request<Chart>(
+          `/api/songs/${encodeURIComponent(song.id)}/chart/${encodeURIComponent(instrument)}/${encodeURIComponent(difficulty)}`,
+        ),
+
+  inspectCommunityChart: (path: string) =>
+    request<{ instruments: Record<string, unknown>; length: number }>(
+      `/api/community/inspect?path=${encodeURIComponent(path)}`,
+    ),
+
   library: () => request<LibraryResponse>('/api/songs'),
   rescan: () => request<LibraryResponse>('/api/songs/rescan', { method: 'POST' }),
   song: (songId: string) => request<SongSummary>(`/api/songs/${encodeURIComponent(songId)}`),

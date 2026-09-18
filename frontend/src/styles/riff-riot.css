@@ -1114,3 +1114,51 @@ button {
   .lb-row { grid-template-columns: 24px 1fr auto; font-size: 11px; }
   .lb-acc { display: none; }
 }
+
+
+/* ================================================ ABAS DA LISTA DE MUSICAS */
+.sl-tabs { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.sl-tab {
+  font-family: 'Archivo Black', sans-serif; font-size: 13px; letter-spacing: .06em;
+  padding: 9px 15px; min-height: 40px; cursor: pointer;
+  background: transparent; color: #7e8a75;
+  border: 3px solid #7e8a7555; border-radius: 2px;
+}
+.sl-tab.ativa { background: #7e8a75; color: #1d2419; border-color: #7e8a75; }
+.sl-tab.enviar { margin-left: auto; color: #d9691f; border-color: #d9691f66; }
+.sl-tab.enviar:hover { background: #d9691f; color: #2c1204; }
+.sl-acao {
+  font-size: 15px; cursor: pointer; font-family: 'Archivo Black', sans-serif;
+  color: #7e8a75; background: none; border: none; padding: 6px 4px; min-height: 36px;
+}
+.sl-vazio {
+  font-family: 'Space Mono', monospace; font-size: 12px; line-height: 1.7;
+  color: #7e8a75; padding: 22px 4px;
+}
+
+@media (max-width: 820px) {
+  .sl-tab { font-size: 11px; padding: 8px 11px; flex: 1 1 auto; }
+  .sl-tab.enviar { margin-left: 0; flex-basis: 100%; }
+}
+
+
+/* ====================================================== ENVIO DE MUSICA */
+.up-card { max-width: 480px; }
+.up-card code {
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  background: rgba(44, 33, 24, .14); padding: 1px 4px; border-radius: 2px;
+}
+.up-card a { color: #8a4a12; text-decoration: underline; }
+.up-resumo {
+  display: grid; gap: 5px; padding: 11px 12px;
+  background: rgba(239, 230, 214, .45); border: 2px solid #5c4c3a55;
+}
+.up-linha {
+  display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+  font-family: 'Space Mono', monospace; font-size: 11px; color: #6b5a46;
+}
+.up-linha strong { color: #2c2118; text-align: right; word-break: break-all; }
+.up-progresso { display: grid; gap: 5px; }
+.up-progresso-texto {
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .08em; color: #4a3a28;
+}

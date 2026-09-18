@@ -11,6 +11,7 @@ import { SettingsScreen } from './pages/SettingsScreen'
 import { SongSelect } from './pages/SongSelect'
 import { TitleScreen } from './pages/TitleScreen'
 import { AuthScreen } from './pages/AuthScreen'
+import { UploadSong } from './pages/UploadSong'
 import { useAuth } from './auth/useAuth'
 import { submitScore } from './lib/scores'
 import { useSettingsSync } from './settings/useSettingsSync'
@@ -34,6 +35,7 @@ type Screen =
   | 'mp-start'
   | 'lobby'
   | 'auth'
+  | 'upload'
 
 export function App() {
   const settings = useSettings()
@@ -155,8 +157,19 @@ export function App() {
         />
       )}
 
+      {screen === 'upload' && auth.session && (
+        <UploadSong
+          userId={auth.session.user.id}
+          onBack={() => setScreen('songs')}
+          onDone={() => setScreen('songs')}
+        />
+      )}
+
       {screen === 'songs' && (
         <SongSelect
+          // Enviar exige conta: sem isso nao ha a quem responsabilizar pelo
+          // conteudo, e a policy do Storage tambem recusaria.
+          onUpload={auth.session ? () => setScreen('upload') : undefined}
           onBack={() => setScreen(multiplayer ? 'lobby' : 'menu')}
           onSelect={(selected) => {
             setSong(selected)

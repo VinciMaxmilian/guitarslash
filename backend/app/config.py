@@ -25,6 +25,9 @@ class Settings:
     storage: str
     assets_base_url: str
     cache_dir: Path
+    #: Base publica do bucket `community` no Supabase Storage. Vazio = musicas
+    #: da comunidade desligadas neste servidor.
+    community_base_url: str = ""
 
     @property
     def is_local_storage(self) -> bool:
@@ -55,4 +58,5 @@ def load_settings() -> Settings:
         storage=(_env("GUITARSLASH_STORAGE") or "local").lower(),
         assets_base_url=_env("GUITARSLASH_ASSETS_BASE_URL").rstrip("/"),
         cache_dir=cache_dir,
+        community_base_url=_env("GUITARSLASH_COMMUNITY_BASE_URL").rstrip("/"),
     )

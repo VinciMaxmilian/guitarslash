@@ -59,7 +59,7 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
 
     const boot = async () => {
       try {
-        const chart = await api.chart(song.id, instrument, difficulty)
+        const chart = await api.chartFor(song, instrument, difficulty)
         if (cancelled) return
         chartRef.current = chart
 
@@ -219,7 +219,7 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
           const mesmo =
             outro.instrument === instrument && outro.difficulty === difficulty
               ? chartRef.current
-              : await api.chart(song.id, outro.instrument, outro.difficulty)
+              : await api.chartFor(song, outro.instrument, outro.difficulty)
           if (mesmo) proximo.set(outro.id, mesmo)
         } catch {
           // Sem o chart dele a miniatura fica vazia; nao vale quebrar a partida.

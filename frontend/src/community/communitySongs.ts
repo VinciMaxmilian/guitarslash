@@ -1,0 +1,223 @@
+import { supabase } from '../lib/supabase'
+import type { InstrumentInfo, SongSummary } from '../api/types'
+import { inspectFolder, parseIni, slugify, type InspectedFolder } from './songFolder'
+
+/**
+ * Musicas da comunidade: envio e listagem.
+ *
+ * Decisao que amarra o resto: a musica da comunidade e convertida para o MESMO
+ * `SongSummary` da biblioteca local. Assim a lista, a selecao de instrumento, a
+ * gameplay e o resultado funcionam sem saber de onde a musica veio - o unico
+ * ponto que diferencia e de onde vem o chart.
+ */
+
+export const BUCKET = 'community'
+
+export interface CommunityRow {
+  id: string
+  slug: string
+  title: string
+  artist: string
+  album: string | null
+  charter: string | null
+  year: string | null
+  genre: string | null
+  duration: number
+  delay: number
+  preview_start: number
+  storage_prefix: string
+  files: Record<string, string>
+  /** Vem do `instrument_summary` do parser no backend, gravado no envio. */
+  instruments: Record<string, InstrumentInfo>
+  total_bytes: number
+  uploader_id: string | null
+  created_at: string
+}
+
+function publicUrl(path: string): string | null {
+  if (!supabase || !path) return null
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+}
+
+/**
+ * Linha do banco -> `SongSummary`.
+ *
+ * `chartPath` e o unico campo a mais: e o caminho do notes.mid no bucket, que
+ * o backend usa para parsear o chart (o parser e o mesmo da biblioteca local,
+ * de proposito - dois parsers divergiriam e dessincronizariam a partida).
+ */
+export function toSongSummary(row: CommunityRow): SongSummary {
+  const audio: Record<string, string> = {}
+  for (const [stem, caminho] of Object.entries(row.files ?? {})) {
+    if (stem === 'chart' || stem === 'cover' || stem === 'ini') continue
+    const url = publicUrl(`${row.storage_prefix}/${caminho}`)
+    if (url) audio[stem] = url
+  }
+
+  const capa = row.files?.cover ? publicUrl(`${row.storage_prefix}/${row.files.cover}`) : null
+
+  return {
+    id: row.slug,
+    title: row.title,
+    artist: row.artist || 'Artista desconhecido',
+    album: row.album ?? null,
+    year: row.year ?? null,
+    genre: row.genre ?? null,
+    charter: row.charter ?? null,
+    duration: row.duration,
+    previewStart: row.preview_start,
+    delay: row.delay,
+    instruments: row.instruments ?? {},
+    assets: {
+      cover: capa,
+      backgroundVideo: null,
+      chart: null,
+      audio,
+    },
+    missing: [],
+    hasCover: capa !== null,
+    hasBackgroundVideo: false,
+    source: 'community',
+    chartPath: row.files?.chart ? `${row.storage_prefix}/${row.files.chart}` : undefined,
+    uploaderId: row.uploader_id ?? undefined,
+  }
+}
+
+export async function fetchCommunitySongs(limit = 200): Promise<SongSummary[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('community_songs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.warn('[guitarslash] nao foi possivel listar a comunidade:', error.message)
+    return []
+  }
+  return (data ?? []).map((row) => toSongSummary(row as CommunityRow))
+}
+
+export interface UploadProgress {
+  /** Passo atual, legivel para a interface. */
+  step: string
+  done: number
+  total: number
+}
+
+export interface UploadResult {
+  ok: boolean
+  error?: string
+  slug?: string
+}
+
+/**
+ * Envia a pasta e registra a musica.
+ *
+ * Ordem importa: os ARQUIVOS vao primeiro, a LINHA depois. Se invertessemos, um
+ * upload falho deixaria uma musica listada e injogavel.
+ */
+export async function uploadSong(
+  userId: string,
+  arquivos: readonly File[],
+  onProgress: (p: UploadProgress) => void,
+  inspectChart: (path: string) => Promise<{ instruments: Record<string, unknown>; length: number }>,
+): Promise<UploadResult> {
+  if (!supabase) return { ok: false, error: 'Nuvem não configurada.' }
+
+  const pasta: InspectedFolder = inspectFolder(arquivos)
+  if (!pasta.ok) return { ok: false, error: pasta.errors.join(' ') }
+
+  const iniTexto = await pasta.ini!.file.text()
+  const meta = parseIni(iniTexto)
+  const titulo = meta.title.trim() || pasta.chart!.name
+  const slug = slugify(meta.artist, titulo)
+  // O caminho comeca com o uid: e o que a policy do Storage exige.
+  const prefix = `${userId}/${slug}`
+
+  const aEnviar: { logico: string; arquivo: File }[] = [
+    { logico: 'chart', arquivo: pasta.chart!.file },
+    { logico: 'ini', arquivo: pasta.ini!.file },
+    ...pasta.audio.map((a) => ({ logico: stemName(a.name), arquivo: a.file })),
+  ]
+  if (pasta.cover) aEnviar.push({ logico: 'cover', arquivo: pasta.cover.file })
+
+  const files: Record<string, string> = {}
+  let enviados = 0
+
+  for (const { logico, arquivo } of aEnviar) {
+    const nome = baseName(arquivo.name)
+    onProgress({ step: `Enviando ${nome}`, done: enviados, total: aEnviar.length + 1 })
+
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(`${prefix}/${nome}`, arquivo, { upsert: true, contentType: arquivo.type || undefined })
+
+    if (error) return { ok: false, error: `Falha ao enviar ${nome}: ${error.message}` }
+    files[logico] = nome
+    enviados += 1
+  }
+
+  // Instrumentos vem do parser do backend, uma vez so: a lista nao pode
+  // parsear MIDI a cada abertura.
+  onProgress({ step: 'Lendo o chart', done: enviados, total: aEnviar.length + 1 })
+  let instruments: Record<string, unknown> = {}
+  let length = meta.duration
+  try {
+    const inspecao = await inspectChart(`${prefix}/${files.chart}`)
+    instruments = inspecao.instruments
+    if (!length) length = inspecao.length
+  } catch (erro) {
+    return {
+      ok: false,
+      error: `O chart não pôde ser lido: ${erro instanceof Error ? erro.message : erro}`,
+    }
+  }
+
+  if (!Object.values(instruments).some((i) => (i as { supported?: boolean })?.supported)) {
+    return { ok: false, error: 'O chart não tem nenhum instrumento que o jogo saiba tocar.' }
+  }
+
+  const { error: erroLinha } = await supabase.from('community_songs').insert({
+    uploader_id: userId,
+    slug,
+    title: titulo.slice(0, 200),
+    artist: meta.artist.slice(0, 200),
+    album: meta.album,
+    charter: meta.charter,
+    year: meta.year,
+    genre: meta.genre,
+    duration: length,
+    delay: meta.delay,
+    preview_start: meta.previewStart,
+    storage_prefix: prefix,
+    files,
+    instruments,
+    total_bytes: pasta.totalBytes,
+  })
+
+  if (erroLinha) {
+    // Duplicata e cota tem mensagem propria: "erro 23505" nao ajuda ninguem.
+    if (erroLinha.message.includes('duplicate key')) {
+      return { ok: false, error: 'Esta música já está na biblioteca da comunidade.' }
+    }
+    if (erroLinha.message.includes('cota de envio')) {
+      return { ok: false, error: 'Você atingiu sua cota de envio.' }
+    }
+    return { ok: false, error: erroLinha.message }
+  }
+
+  onProgress({ step: 'Pronto', done: aEnviar.length + 1, total: aEnviar.length + 1 })
+  return { ok: true, slug }
+}
+
+function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path
+}
+
+/** "guitar.opus" -> "guitar". E a chave que o AudioEngine usa como stem. */
+function stemName(nome: string): string {
+  const base = baseName(nome)
+  const ponto = base.lastIndexOf('.')
+  return (ponto < 0 ? base : base.slice(0, ponto)).toLowerCase()
+}
