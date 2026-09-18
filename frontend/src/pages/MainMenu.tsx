@@ -15,6 +15,9 @@ interface Props {
   onPlay: () => void
   onSettings: () => void
   onMultiplayer: () => void
+  /** undefined = nuvem nao configurada neste build; o item nao aparece. */
+  onAccount?: () => void
+  accountName?: string | null
   /**
    * Multiplayer LAN so existe quando esta pagina vem do processo do host.
    * No deploy publico nao ha WebSocket: Serverless Function nao mantem
@@ -27,6 +30,8 @@ export function MainMenu({
   onPlay,
   onSettings,
   onMultiplayer,
+  onAccount,
+  accountName,
   multiplayerAvailable,
 }: Props) {
   const [activeIdx, setActiveIdx] = useState(0)
@@ -47,6 +52,16 @@ export function MainMenu({
     },
     { label: 'TRAINING', action: undefined, cls: 'menu-item-5', disabled: true },
     { label: 'OPTIONS', action: onSettings, cls: 'menu-item-6', disabled: false },
+    ...(onAccount
+      ? [
+          {
+            label: accountName ? accountName.toUpperCase() : 'LOGIN',
+            action: onAccount,
+            cls: 'menu-item-2',
+            disabled: false,
+          },
+        ]
+      : []),
   ]
 
   useEffect(() => {

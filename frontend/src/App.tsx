@@ -10,6 +10,10 @@ import { Result } from './pages/Result'
 import { SettingsScreen } from './pages/SettingsScreen'
 import { SongSelect } from './pages/SongSelect'
 import { TitleScreen } from './pages/TitleScreen'
+import { AuthScreen } from './pages/AuthScreen'
+import { useAuth } from './auth/useAuth'
+import { submitScore } from './lib/scores'
+import { useSettingsSync } from './settings/useSettingsSync'
 import { Lobby } from './pages/Lobby'
 import { MultiplayerStart } from './pages/MultiplayerStart'
 import type { PlayerSnapshot, Chart } from './game/types'
@@ -29,9 +33,11 @@ type Screen =
   | 'result'
   | 'mp-start'
   | 'lobby'
+  | 'auth'
 
 export function App() {
   const settings = useSettings()
+  const auth = useAuth()
   const [screen, setScreen] = useState<Screen>('title')
   const [song, setSong] = useState<SongSummary | null>(null)
   const [instrument, setInstrument] = useState<string | null>(null)
@@ -49,6 +55,7 @@ export function App() {
   //: Evita entrar duas vezes na mesma partida quando o BEGIN_LOAD se repete.
   const loadedFor = useRef<string | null>(null)
 
+  useSettingsSync(auth.session)
   useBackgroundMusic(screen)
 
   useEffect(() => {
@@ -121,11 +128,15 @@ export function App() {
             setScreen('songs')
           }}
           onSettings={() => setScreen('settings')}
+          onAccount={auth.enabled ? () => setScreen('auth') : undefined}
+          accountName={auth.displayName}
           onMultiplayer={() => setScreen('mp-start')}
         />
       )}
 
       {screen === 'settings' && <SettingsScreen onBack={() => setScreen('menu')} />}
+
+      {screen === 'auth' && <AuthScreen auth={auth} onBack={() => setScreen('menu')} />}
 
       {screen === 'mp-start' && (
         <MultiplayerStart
@@ -192,6 +203,17 @@ export function App() {
           onFinish={(players, chart) => {
             setResults({ players, chart })
             setScreen('result')
+            // Placar so vai para a nuvem em partida solo e com conta. Falha no
+            // envio nao interfere na tela de resultado.
+            const eu = players[0]
+            const userId = auth.session?.user?.id
+            if (eu && userId && !multiplayer) {
+              void submitScore(userId, {
+                songId: selection.song.id,
+                instrument: selection.instrument,
+                difficulty: selection.difficulty,
+              }, eu)
+            }
           }}
         />
       )}
@@ -204,6 +226,7 @@ export function App() {
           players={results.players}
           totalNotes={results.chart.noteCount}
           mp={multiplayer ? mp : undefined}
+          userId={auth.session?.user?.id ?? null}
           onRetry={
             multiplayer
               ? undefined

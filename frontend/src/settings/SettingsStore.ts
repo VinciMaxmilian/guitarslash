@@ -2,6 +2,8 @@ import { DEFAULT_BINDINGS, DEFAULT_NOTE_COLORS } from '../game/config'
 import type { Settings } from './types'
 
 const STORAGE_KEY = 'guitarslash.settings'
+/** Hora da ultima alteracao local, usada para decidir o sync com a nuvem. */
+const TOUCHED_KEY = 'guitarslash.settings.touchedAt'
 export const SETTINGS_VERSION = 1
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -88,6 +90,25 @@ export class SettingsStore {
 }
 
 export const settingsStore = new SettingsStore()
+
+/** ms epoch da ultima alteracao local, ou null se nunca houve. */
+export function localTouchedAt(): number | null {
+  try {
+    const raw = localStorage.getItem(TOUCHED_KEY)
+    const valor = raw === null ? Number.NaN : Number(raw)
+    return Number.isFinite(valor) ? valor : null
+  } catch {
+    return null
+  }
+}
+
+export function markLocalTouched(at: number = Date.now()): void {
+  try {
+    localStorage.setItem(TOUCHED_KEY, String(at))
+  } catch {
+    // Sem localStorage o sync cai no caso "sem carimbo": a nuvem ganha.
+  }
+}
 
 // ------------------------------------------------------------------ helpers
 
@@ -195,6 +216,10 @@ function load(): Settings {
 }
 
 function persist(settings: Settings): void {
+  // Carimba a alteracao. Depois de um PULL da nuvem, o hook de sync sobrescreve
+  // este valor com o `updated_at` da nuvem - senao o local pareceria mais novo
+  // e disparariamos um push logo em seguida, em loop.
+  markLocalTouched()
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   } catch {

@@ -1,8 +1,12 @@
+import { useEffect, useState } from 'react'
+
 import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/types'
 import type { MPResults } from '../game/multiplayerProtocol'
 import type { MultiplayerSession } from '../game/useMultiplayer'
 import type { PlayerSnapshot } from '../game/types'
 import { formatNumber, formatPercent } from '../utils/format'
+import { fetchLeaderboard, type LeaderboardRow } from '../lib/scores'
+import { CLOUD_ENABLED } from '../lib/supabase'
 
 interface Props {
   song: SongSummary
@@ -12,6 +16,8 @@ interface Props {
   totalNotes: number
   /** Presente apenas em partida LAN. */
   mp?: MultiplayerSession
+  /** id do jogador logado, para destacar a propria linha no leaderboard. */
+  userId?: string | null
   /** Repetir a musica nao existe em LAN: quem decide isso e o host. */
   onRetry?: () => void
   onSongSelect: () => void
@@ -24,6 +30,7 @@ export function Result({
   players,
   totalNotes,
   mp,
+  userId,
   onRetry,
   onSongSelect,
 }: Props) {
@@ -52,6 +59,17 @@ export function Result({
       )}
 
       {results && <MultiplayerResults results={results} selfId={mp?.selfId ?? null} />}
+
+      {/* Leaderboard so em partida solo: em LAN o placar que interessa e o
+          da sala, que ja aparece acima. */}
+      {CLOUD_ENABLED && !mp && (
+        <Leaderboard
+          songId={song.id}
+          instrument={instrument}
+          difficulty={difficulty}
+          userId={userId ?? null}
+        />
+      )}
 
       <div className="panel" style={{ padding: 28, display: 'grid', gap: 22 }}>
         <div style={{ textAlign: 'center', display: 'grid', gap: 8 }}>
@@ -153,6 +171,61 @@ function MultiplayerResults({
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function Leaderboard({
+  songId,
+  instrument,
+  difficulty,
+  userId,
+}: {
+  songId: string
+  instrument: string
+  difficulty: string
+  userId: string | null
+}) {
+  const [linhas, setLinhas] = useState<LeaderboardRow[] | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    void fetchLeaderboard({ songId, instrument, difficulty }).then((r) => {
+      if (vivo) setLinhas(r)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [songId, instrument, difficulty])
+
+  if (linhas === null) return null
+
+  return (
+    <div className="panel lb-box" style={{ padding: 20 }}>
+      <div className="lb-title">
+        MELHORES · {INSTRUMENT_LABELS[instrument] ?? instrument} ·{' '}
+        {DIFFICULTY_LABELS[difficulty] ?? difficulty}
+      </div>
+
+      {linhas.length === 0 ? (
+        <div className="lb-vazio">
+          {userId
+            ? 'Nenhum placar ainda nesta música. O seu foi o primeiro.'
+            : 'Entre com uma conta para o seu placar aparecer aqui.'}
+        </div>
+      ) : (
+        linhas.map((linha, indice) => (
+          <div
+            key={linha.user_id}
+            className={`lb-row ${linha.user_id === userId ? 'eu' : ''}`}
+          >
+            <span className="lb-pos">{indice + 1}</span>
+            <span className="lb-nome">{linha.display_name}</span>
+            <span className="lb-score">{formatNumber(linha.score)}</span>
+            <span className="lb-acc">{formatPercent(linha.accuracy)}</span>
+          </div>
+        ))
+      )}
     </div>
   )
 }
