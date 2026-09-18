@@ -38,6 +38,16 @@ export class InputRouter {
     this.handler = handler
   }
 
+  /**
+   * Entrada que nao vem do teclado (toque na tela, por exemplo).
+   *
+   * Entra pelo MESMO caminho das teclas, entao o julgamento da nota nao sabe
+   * de onde veio o comando - dedo e tecla sao tratados igual.
+   */
+  dispatchAction(playerId: number, action: GameAction, pressed: boolean): void {
+    this.handler?.({ playerId, action, pressed })
+  }
+
   attach(): void {
     if (this.attached) return
     window.addEventListener('keydown', this.onKeyDown)

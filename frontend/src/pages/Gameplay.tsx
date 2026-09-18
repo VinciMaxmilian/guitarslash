@@ -7,6 +7,8 @@ import { ScoreReporter } from '../game/ScoreReporter'
 import { OpponentHighways } from '../components/OpponentHighways'
 import { RockMeter, ScorePanel } from '../components/ScorePanel'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { TouchControls } from '../components/TouchControls'
+import { hasTouch } from '../game/touchLanes'
 import { judgementCode } from '../game/multiplayerProtocol'
 import type { MultiplayerSession } from '../game/useMultiplayer'
 import type { MPScoreboardRow } from '../game/multiplayerProtocol'
@@ -234,6 +236,17 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
 
   const getSongTime = useMemo(() => () => engineRef.current?.songTime ?? 0, [])
 
+  // Decidido uma vez: trocar os controles no meio da musica seria pior que
+  // escolher errado. `hasTouch` olha capacidade, nao tamanho de tela.
+  const [touch] = useState(hasTouch)
+  const tocarLane = useMemo(
+    () => (lane: number, pressed: boolean) => engineRef.current?.pressLane(lane, pressed),
+    [],
+  )
+  const soltarTudo = useMemo(() => () => engineRef.current?.releaseAllLanes(), [])
+  const starPower = useMemo(() => () => engineRef.current?.activateStarPower(), [])
+  const pausar = useMemo(() => () => engineRef.current?.togglePause(), [])
+
   const player = me
   const intro = snapshot?.intro
   const videoUrl = resolveAssetUrl(song.assets.backgroundVideo)
@@ -263,6 +276,21 @@ export function Gameplay({ song, instrument, difficulty, mp, onExit, onFinish }:
           charts={rivalCharts}
           getSongTime={getSongTime}
           noteColors={settings.noteColors}
+        />
+      )}
+
+      {/* Fora quando ha overlay: sem isto o dedo aperta traste por tras do
+          menu de pausa. */}
+      {touch && ready && !error && !needsGesture && !snapshot?.paused && player && (
+        <TouchControls
+          onLane={tocarLane}
+          onReleaseAll={soltarTudo}
+          onStarPower={starPower}
+          onPause={pausar}
+          noteColors={settings.noteColors}
+          leftyFlip={settings.gameplay.leftyFlip}
+          starPowerReady={player.starPowerEnergy >= 0.5}
+          starPowerActive={player.starPowerActive}
         />
       )}
 

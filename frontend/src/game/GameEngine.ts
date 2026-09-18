@@ -5,6 +5,7 @@ import { IntroSequence } from './IntroSequence'
 import { InputRouter } from './InputRouter'
 import { PlayerSession } from './PlayerSession'
 import { audioStartDelay, chartDuration, chartTime } from './songClock'
+import { FRET_ACTIONS } from './config'
 import { VideoEngine } from './VideoEngine'
 import type {
   BpmEvent,
@@ -166,6 +167,40 @@ export class GameEngine {
 
   resize(): void {
     this.renderer.resize()
+  }
+
+  // ------------------------------------------------------------------ toque
+
+  /**
+   * Traste acionado por toque na tela.
+   *
+   * A politica de palhetada fica AQUI, e nao na interface: com `requireStrum`
+   * ligado, um toque tambem palheta - senao no celular a nota nunca contaria.
+   * Com ele desligado (o padrao) so o traste ja basta, e palhetar de graca
+   * arriscaria overstrum e quebra de combo.
+   */
+  pressLane(lane: number, pressed: boolean, playerId = 0): void {
+    const action = FRET_ACTIONS[lane]
+    if (!action) return
+
+    this.input.dispatchAction(playerId, action, pressed)
+
+    if (pressed && this.options.settings.gameplay.requireStrum) {
+      this.input.dispatchAction(playerId, 'strum', true)
+      this.input.dispatchAction(playerId, 'strum', false)
+    }
+  }
+
+  /** Solta todos os trastes. O toque perde eventos quando a aba sai de foco. */
+  releaseAllLanes(playerId = 0): void {
+    for (const action of FRET_ACTIONS) {
+      this.input.dispatchAction(playerId, action, false)
+    }
+  }
+
+  activateStarPower(playerId = 0): void {
+    this.input.dispatchAction(playerId, 'starPower', true)
+    this.input.dispatchAction(playerId, 'starPower', false)
   }
 
   applySettings(settings: Settings): void {

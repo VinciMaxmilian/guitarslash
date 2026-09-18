@@ -832,3 +832,75 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .ld-wind, .ld-angel, .ld-word span, .ts-press, .ts-art img { animation: none; }
 }
+
+
+/* ======================================================= CONTROLES DE TOQUE */
+.tc-root {
+  /* z-index ABAIXO do .overlay (5): senao os controles cobririam o menu de
+     pausa e "Continuar"/"Sair" ficariam intocaveis no celular. */
+  position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column;
+  /* Sem isto o navegador entende o gesto como rolagem e cancela o toque no
+     meio da musica. */
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tc-bar {
+  display: flex; align-items: flex-start; justify-content: flex-end; gap: 10px; padding: 10px 12px; pointer-events: none;
+}
+.tc-btn {
+  pointer-events: auto;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: rgba(20, 15, 10, .72); border: 2px solid rgba(239, 230, 214, .35);
+  color: #efe6d6; font-family: 'Archivo Black', sans-serif; font-size: 17px; line-height: 1;
+  display: grid; place-items: center; touch-action: none;
+}
+.tc-btn:disabled { opacity: .35; }
+.tc-sp.pronto { border-color: #8fe9ff; color: #8fe9ff; box-shadow: 0 0 18px rgba(143, 233, 255, .5); }
+.tc-sp.ativo {
+  border-color: #fff; color: #fff; background: rgba(143, 233, 255, .3);
+  animation: tc-sp-pulsa .6s ease-in-out infinite alternate;
+}
+@keyframes tc-sp-pulsa { from { box-shadow: 0 0 12px rgba(143,233,255,.5); } to { box-shadow: 0 0 30px rgba(143,233,255,.95); } }
+
+.tc-area { position: relative; flex: 1; touch-action: none; }
+
+.tc-zone {
+  position: absolute; top: 0; bottom: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  /* Divisoria fina: mostra onde uma zona acaba, sem tapar a faixa. */
+  box-shadow: inset -1px 0 0 rgba(239, 230, 214, .1);
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+}
+.tc-zone:last-child { box-shadow: none; }
+
+/* Marca da zona: discreta em repouso, acende no toque. */
+.tc-pad {
+  width: 78%; max-width: 92px; aspect-ratio: 2 / 1;
+  border-radius: 999px;
+  /* Fallback antes do color-mix: sem ele, navegador que nao suporta descarta
+     a regra e o pad fica invisivel - ou seja, sem alvo visivel para tocar. */
+  border: 2px solid var(--cor);
+  background: rgba(255, 255, 255, .08);
+  border-color: color-mix(in srgb, var(--cor) 55%, transparent);
+  background: color-mix(in srgb, var(--cor) 12%, transparent);
+  transition: background .08s linear, box-shadow .08s linear, transform .08s ease-out;
+}
+.tc-zone.acesa { background: rgba(255, 255, 255, .06); }
+.tc-zone.acesa .tc-pad {
+  background: var(--cor);
+  background: color-mix(in srgb, var(--cor) 72%, transparent);
+  box-shadow: 0 0 26px var(--cor);
+  transform: scale(1.08);
+}
+
+/* Em retrato a faixa fica estreita; avisa que deitar o aparelho e melhor. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .tc-area::after {
+    content: 'Vire o aparelho para jogar melhor';
+    position: absolute; top: 8px; left: 0; right: 0; text-align: center;
+    font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .1em;
+    color: rgba(239, 230, 214, .55); pointer-events: none;
+  }
+}
