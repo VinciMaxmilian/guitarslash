@@ -142,8 +142,6 @@ export function MainMenu({
         ))}
       </div>
 
-      <div className="menu-debug">DEBUG MENU</div>
-
       <div className="rr-control-bar">
         <div className="rr-control-hint no-border">
           <div className="rr-key green" />

@@ -3,7 +3,9 @@ import '../styles/riff-riot.css'
 
 import { api } from '../api/client'
 import {
+  checkDuplicate,
   uploadSong,
+  type DuplicateCheck,
   type UploadProgress,
 } from '../community/communitySongs'
 import {
@@ -38,6 +40,8 @@ export function UploadSong({ userId, onBack, onDone }: Props) {
   const [progresso, setProgresso] = useState<UploadProgress | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [pronto, setPronto] = useState(false)
+  const [duplicada, setDuplicada] = useState<DuplicateCheck | null>(null)
+  const [checando, setChecando] = useState(false)
   const uiSounds = useUISounds()
 
   const pasta: InspectedFolder | null = useMemo(
@@ -62,6 +66,30 @@ export function UploadSong({ userId, onBack, onDone }: Props) {
       vivo = false
     }
   }, [pasta])
+
+  // Checa a duplicata ao escolher a pasta, e nao no envio: descobrir depois de
+  // subir 40 MB gastaria a cota do jogador por nada.
+  useEffect(() => {
+    if (!meta) {
+      setDuplicada(null)
+      return
+    }
+    let vivo = true
+    setChecando(true)
+    void checkDuplicate(slugify(meta.artist, meta.title || 'musica'), userId)
+      .then((r) => {
+        if (vivo) setDuplicada(r)
+      })
+      .finally(() => {
+        if (vivo) setChecando(false)
+      })
+    return () => {
+      vivo = false
+    }
+  }, [meta, userId])
+
+  // Duplicata de outro jogador bloqueia; a propria so avisa que substitui.
+  const bloqueadaPorDuplicata = Boolean(duplicada?.exists && !duplicada.mine)
 
   const enviar = async () => {
     if (!pasta?.ok || progresso) return
@@ -202,6 +230,25 @@ export function UploadSong({ userId, onBack, onDone }: Props) {
                 {mensagem}
               </div>
             ))}
+            {checando && <div className="lobby-note">Verificando se já existe...</div>}
+
+            {duplicada?.exists && !duplicada.mine && (
+              <div className="lobby-warning">
+                Esta música já está na comunidade, enviada por{' '}
+                <strong>{duplicada.uploaderName ?? 'outro jogador'}</strong>
+                {duplicada.createdAt &&
+                  ` em ${new Date(duplicada.createdAt).toLocaleDateString('pt-BR')}`}
+                . Procure por ela na aba COMUNIDADE.
+              </div>
+            )}
+
+            {duplicada?.exists && duplicada.mine && (
+              <div className="lobby-note">
+                Você já enviou esta música. Enviar de novo SUBSTITUI a versão
+                anterior.
+              </div>
+            )}
+
             {erro && <div className="lobby-warning">{erro}</div>}
 
             {progresso && (
@@ -224,10 +271,18 @@ export function UploadSong({ userId, onBack, onDone }: Props) {
 
             <button
               className="btn primary"
-              disabled={!pasta?.ok || progresso !== null}
+              disabled={
+                !pasta?.ok || progresso !== null || checando || bloqueadaPorDuplicata
+              }
               onClick={enviar}
             >
-              <span>{progresso ? 'ENVIANDO...' : 'ENVIAR'}</span>
+              <span>
+                {progresso
+                  ? 'ENVIANDO...'
+                  : duplicada?.mine
+                    ? 'SUBSTITUIR'
+                    : 'ENVIAR'}
+              </span>
             </button>
           </div>
         )}

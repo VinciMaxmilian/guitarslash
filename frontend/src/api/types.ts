@@ -27,6 +27,10 @@ export interface SongSummary {
   /** Caminho do notes.mid no bucket. So em musica da comunidade. */
   chartPath?: string
   uploaderId?: string
+  /** Nome de quem enviou. So em musica da comunidade. */
+  uploaderName?: string | null
+  /** ISO do envio. So em musica da comunidade; ordena "mais recentes". */
+  createdAt?: string
   delay: number
   hasBackgroundVideo: boolean
   hasCover: boolean

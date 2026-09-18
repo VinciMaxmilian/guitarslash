@@ -31,6 +31,8 @@ export interface CommunityRow {
   instruments: Record<string, InstrumentInfo>
   total_bytes: number
   uploader_id: string | null
+  /** Resolvido pela view `community_library` (migration 0003). */
+  uploader_name: string | null
   created_at: string
 }
 
@@ -80,13 +82,17 @@ export function toSongSummary(row: CommunityRow): SongSummary {
     source: 'community',
     chartPath: row.files?.chart ? `${row.storage_prefix}/${row.files.chart}` : undefined,
     uploaderId: row.uploader_id ?? undefined,
+    uploaderName: row.uploader_name,
+    createdAt: row.created_at,
   }
 }
 
 export async function fetchCommunitySongs(limit = 200): Promise<SongSummary[]> {
   if (!supabase) return []
+  // A VIEW, e nao a tabela: ela ja traz o nome de quem enviou (a tabela tem
+  // so o uuid, e `auth.users` nunca deve ser exposta ao cliente).
   const { data, error } = await supabase
-    .from('community_songs')
+    .from('community_library')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -111,6 +117,46 @@ export interface UploadResult {
   slug?: string
 }
 
+export interface DuplicateCheck {
+  /** Ja existe na comunidade. */
+  exists: boolean
+  /** Quem enviou, quando existe. */
+  uploaderName?: string | null
+  /** Data do envio existente. */
+  createdAt?: string
+  /** Enviada por voce mesmo: reenviar substitui. */
+  mine?: boolean
+}
+
+/**
+ * A musica ja esta na comunidade?
+ *
+ * Chamado ANTES de subir arquivo. A restricao `unique` do slug pegaria isso de
+ * qualquer forma, mas so DEPOIS de gastar a cota e a banda do jogador - e os
+ * arquivos ficariam orfaos no bucket, porque o upload e a insercao sao passos
+ * separados.
+ */
+export async function checkDuplicate(
+  slug: string,
+  userId: string | null,
+): Promise<DuplicateCheck> {
+  if (!supabase || !slug) return { exists: false }
+
+  const { data, error } = await supabase
+    .from('community_library')
+    .select('uploader_id, uploader_name, created_at')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (error || !data) return { exists: false }
+  return {
+    exists: true,
+    uploaderName: data.uploader_name,
+    createdAt: data.created_at,
+    mine: Boolean(userId) && data.uploader_id === userId,
+  }
+}
+
 /**
  * Envia a pasta e registra a musica.
  *
@@ -132,6 +178,15 @@ export async function uploadSong(
   const meta = parseIni(iniTexto)
   const titulo = meta.title.trim() || pasta.chart!.name
   const slug = slugify(meta.artist, titulo)
+
+  // Checa ANTES de subir: a restricao unique pegaria depois, mas ai a cota e a
+  // banda ja teriam sido gastas e os arquivos ficariam orfaos no bucket.
+  const duplicada = await checkDuplicate(slug, userId)
+  if (duplicada.exists && !duplicada.mine) {
+    const autor = duplicada.uploaderName ?? 'outro jogador'
+    return { ok: false, error: `Esta música já foi enviada por ${autor}.` }
+  }
+
   // O caminho comeca com o uid: e o que a policy do Storage exige.
   const prefix = `${userId}/${slug}`
 
@@ -178,7 +233,9 @@ export async function uploadSong(
     return { ok: false, error: 'O chart não tem nenhum instrumento que o jogo saiba tocar.' }
   }
 
-  const { error: erroLinha } = await supabase.from('community_songs').insert({
+  // `upsert` por slug: reenviar a PROPRIA musica atualiza, em vez de falhar na
+  // restricao unique. Reenvio de outro jogador ja foi barrado acima.
+  const { error: erroLinha } = await supabase.from('community_songs').upsert({
     uploader_id: userId,
     slug,
     title: titulo.slice(0, 200),
@@ -194,7 +251,7 @@ export async function uploadSong(
     files,
     instruments,
     total_bytes: pasta.totalBytes,
-  })
+  }, { onConflict: 'slug' })
 
   if (erroLinha) {
     // Duplicata e cota tem mensagem propria: "erro 23505" nao ajuda ninguem.

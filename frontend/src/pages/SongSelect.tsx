@@ -11,6 +11,12 @@ import { useUISounds } from '../hooks/useUISounds'
 import { backgroundStem } from '../game/backgroundPlaylist'
 import { fetchCommunitySongs } from '../community/communitySongs'
 import { CLOUD_ENABLED } from '../lib/supabase'
+import {
+  SORT_LABELS,
+  browseSongs,
+  difficultyScore,
+  type SortMode,
+} from '../community/songBrowse'
 
 interface Props {
   onBack: () => void
@@ -27,6 +33,8 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('principais')
+  const [busca, setBusca] = useState('')
+  const [ordem, setOrdem] = useState<SortMode>('recentes')
   const [comunidade, setComunidade] = useState<SongSummary[] | null>(null)
   const previewRef = useRef<HTMLAudioElement | null>(null)
   const uiSounds = useUISounds()
@@ -54,9 +62,16 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
     void fetchCommunitySongs().then(setComunidade)
   }, [aba, comunidade])
 
-  const songs = useMemo(
+  const todas = useMemo(
     () => (aba === 'comunidade' ? (comunidade ?? []) : (library?.songs ?? [])),
     [aba, comunidade, library],
+  )
+
+  // A biblioteca local ja vem ordenada por artista do backend, e nao tem data
+  // de envio: 'recentes' ali nao significa nada, entao cai no alfabetico.
+  const songs = useMemo(
+    () => browseSongs(todas, busca, aba === 'principais' && ordem === 'recentes' ? 'alfabetica' : ordem),
+    [todas, busca, ordem, aba],
   )
 
   // Trocar de aba precisa mover a selecao: o id da aba anterior nao existe aqui.
@@ -203,6 +218,38 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
           </button>
         </div>
 
+        <div className="sl-filtros">
+          <input
+            className="sl-busca"
+            value={busca}
+            onChange={(event) => setBusca(event.target.value)}
+            placeholder="Buscar música, artista ou charter"
+            aria-label="Buscar"
+          />
+          {busca && (
+            <button className="sl-limpar" onClick={() => setBusca('')} aria-label="Limpar busca">
+              x
+            </button>
+          )}
+          <label className="sl-ordem">
+            <select
+              value={ordem}
+              onChange={(event) => {
+                uiSounds.play('scroll')
+                setOrdem(event.target.value as SortMode)
+              }}
+            >
+              {(['recentes', 'alfabetica', 'dificuldade'] as SortMode[])
+                .filter((modo) => aba === 'comunidade' || modo !== 'recentes')
+                .map((modo) => (
+                  <option key={modo} value={modo}>
+                    {SORT_LABELS[modo]}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+
         <div className="song-list-title">
           <span>
             {aba === 'comunidade'
@@ -238,6 +285,10 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
           </div>
         )}
 
+        {busca && songs.length === 0 && todas.length > 0 && (
+          <div className="sl-vazio">Nenhuma música casa com "{busca}".</div>
+        )}
+
         {songs.map((song) => (
           <div
             key={song.id}
@@ -248,6 +299,13 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
             <div>
               <div className="song-row-title">{song.title}</div>
               <div className="song-row-artist">{song.artist.toUpperCase()}</div>
+              {song.source === 'community' && (
+                <div className="song-row-autor">
+                  {/* Conta apagada deixa o nome nulo; a musica continua la. */}
+                  enviada por {song.uploaderName ?? 'anônimo'}
+                  {song.createdAt && ` · ${formatDate(song.createdAt)}`}
+                </div>
+              )}
             </div>
             <div className="song-row-stats">
               <div className="song-row-stars">
@@ -256,6 +314,11 @@ export function SongSelect({ onBack, onSelect, onUpload }: Props) {
                 ))}
               </div>
               <div className="song-row-score">{formatNumber(noteTotal(song))}</div>
+              {difficultyScore(song) > 0 && (
+                <div className="song-row-nps">
+                  {difficultyScore(song).toFixed(1)} notas/s
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -313,6 +376,12 @@ function isPlayable(song: SongSummary): boolean {
     (info) => info.available && info.supported && info.difficulties.length > 0,
   )
   return hasInstrument && Object.keys(song.assets.audio).length > 0
+}
+
+/** "2026-09-18T..." -> "18/09/2026". Data curta cabe na linha. */
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR')
 }
 
 function stopPreview(ref: React.MutableRefObject<HTMLAudioElement | null>): void {
