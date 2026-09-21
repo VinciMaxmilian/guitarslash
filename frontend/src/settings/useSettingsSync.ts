@@ -73,14 +73,26 @@ export function useSettingsSync(session: Session | null): void {
     let timer: number | undefined
     const cancelar = settingsStore.subscribe(() => {
       if (aplicandoDaNuvem.current) return
-      // Rascunho nao vai para a nuvem: se fosse, sair da tela sem salvar
-      // deixaria na conta uma configuracao que nem no proprio navegador
-      // existe, e ela voltaria no proximo dispositivo.
-      if (settingsStore.dirty) return
+
+      // Cancelar vem ANTES de qualquer desistencia. Deixar um envio agendado
+      // de pe enquanto ha rascunho era o pior dos mundos: o envio disparava
+      // 1,5 s depois, lia `settingsStore.get()` - que a essa altura e o
+      // RASCUNHO - e gravava na conta uma configuracao que o jogador podia
+      // nem ter salvado. Ao recarregar, a nuvem estava mais nova que o disco
+      // e vencia: o rascunho abandonado voltava como se fosse o definitivo, e
+      // um "restaurar padrao" que ninguem confirmou zerava tudo a cada visita.
       window.clearTimeout(timer)
+
+      // Rascunho nao vai para a nuvem: sair da tela sem salvar nao pode
+      // deixar na conta uma configuracao que nem no proprio navegador existe.
+      if (settingsStore.dirty) return
+
       // Debounce: mexer num slider dispara dezenas de alteracoes, e cada uma
       // seria uma escrita no banco.
       timer = window.setTimeout(() => {
+        // Checado DE NOVO na hora de enviar, e nao so ao agendar: o estado
+        // pode ter virado rascunho durante a espera.
+        if (settingsStore.dirty) return
         void supabase!.from('player_settings').upsert(
           { user_id: userId, settings: toCloudPayload(settingsStore.get()) },
           { onConflict: 'user_id' },

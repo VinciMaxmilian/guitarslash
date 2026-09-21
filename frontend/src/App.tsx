@@ -23,6 +23,7 @@ import { MultiplayerStart } from './pages/MultiplayerStart'
 import type { PlayerSnapshot, Chart } from './game/types'
 import { useBackgroundMusic } from './hooks/useBackgroundMusic'
 import { useSettings } from './hooks/useSettings'
+import { settingsStore } from './settings/SettingsStore'
 import { useMultiplayer } from './game/useMultiplayer'
 import { MULTIPLAYER_AVAILABLE } from './game/hostMode'
 
@@ -71,6 +72,24 @@ export function App() {
   useEffect(() => {
     void api.library()
   }, [])
+
+  /**
+   * Conta conectada manda no nome.
+   *
+   * Sem isto o jogador tem DOIS nomes: o `profileName` deste navegador, que
+   * aparece no lobby, e o `display_name` da conta, que aparece no ranking -
+   * e nenhuma pista de qual vale onde. O da conta ganha porque e o unico que
+   * acompanha o jogador para outro aparelho.
+   *
+   * Nao mexe enquanto a tela de configuracoes esta aberta: seria uma
+   * alteracao que o jogador nao fez aparecendo como rascunho dele.
+   */
+  useEffect(() => {
+    const nome = auth.displayName
+    if (!nome || settingsStore.editing) return
+    if (settingsStore.get().profileName === nome) return
+    settingsStore.update({ profileName: nome })
+  }, [auth.displayName])
 
   const enterGame = useCallback(async (songId: string, inst: string, diff: string) => {
     const s = await api.song(songId)
@@ -168,7 +187,9 @@ export function App() {
         />
       )}
 
-      {screen === 'settings' && <SettingsScreen onBack={() => setScreen('menu')} />}
+      {screen === 'settings' && (
+        <SettingsScreen auth={auth} onBack={() => setScreen('menu')} />
+      )}
 
       {screen === 'auth' && <AuthScreen auth={auth} onBack={() => setScreen('menu')} />}
 

@@ -15,6 +15,12 @@ export interface AuthState {
   signUp: (email: string, password: string, displayName: string) => Promise<boolean>
   signIn: (email: string, password: string) => Promise<boolean>
   signOut: () => Promise<void>
+  /**
+   * Renomeia a conta. Grava em `profiles`, que e a tabela que o ranking le.
+   *
+   * @returns true quando gravou.
+   */
+  updateDisplayName: (name: string) => Promise<boolean>
   clearError: () => void
 }
 
@@ -128,6 +134,29 @@ export function useAuth(): AuthState {
     await supabase.auth.signOut()
   }, [])
 
+  const updateDisplayName = useCallback(
+    async (nome: string) => {
+      const id = session?.user?.id
+      const limpo = nome.trim().slice(0, 24)
+      if (!supabase || !id || !limpo) return false
+
+      const { error: erro } = await supabase
+        .from('profiles')
+        .update({ display_name: limpo })
+        .eq('id', id)
+
+      if (erro) {
+        setError(traduzir(erro.message))
+        return false
+      }
+      // Atualiza local sem reconsultar: a policy so deixa editar o proprio
+      // perfil, entao o que foi gravado e exatamente o que foi mandado.
+      setDisplayName(limpo)
+      return true
+    },
+    [session?.user?.id],
+  )
+
   const clearError = useCallback(() => setError(null), [])
 
   return useMemo(
@@ -140,8 +169,19 @@ export function useAuth(): AuthState {
       signUp,
       signIn,
       signOut,
+      updateDisplayName,
       clearError,
     }),
-    [session, displayName, loading, error, signUp, signIn, signOut, clearError],
+    [
+      session,
+      displayName,
+      loading,
+      error,
+      signUp,
+      signIn,
+      signOut,
+      updateDisplayName,
+      clearError,
+    ],
   )
 }

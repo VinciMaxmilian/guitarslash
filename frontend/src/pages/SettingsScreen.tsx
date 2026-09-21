@@ -7,6 +7,7 @@ import {
   DEFAULT_NOTE_COLORS,
   LANE_NAMES,
 } from '../game/config'
+import type { AuthState } from '../auth/useAuth'
 import type { GameAction } from '../game/types'
 import { useSettings, useSettingsDirty } from '../hooks/useSettings'
 import { useUISounds } from '../hooks/useUISounds'
@@ -15,6 +16,7 @@ import type { EffectsLevel, Settings } from '../settings/types'
 import { keyLabel } from '../utils/format'
 
 interface Props {
+  auth: AuthState
   onBack: () => void
 }
 
@@ -31,7 +33,7 @@ const TABS: { id: TabId; label: string; hint: string }[] = [
   { id: 'calibracao', label: 'Sincronia', hint: 'Atraso do áudio e do vídeo' },
 ]
 
-export function SettingsScreen({ onBack }: Props) {
+export function SettingsScreen({ auth, onBack }: Props) {
   const settings = useSettings()
   const dirty = useSettingsDirty()
   const uiSounds = useUISounds()
@@ -76,6 +78,25 @@ export function SettingsScreen({ onBack }: Props) {
     return () => window.clearTimeout(timer)
   }, [salvo])
 
+  /**
+   * Fechar ou recarregar a aba com rascunho aberto perde o rascunho.
+   *
+   * O botao Voltar ja pergunta, mas o X da aba nao passa por ele - e o
+   * jogador so descobriria na proxima visita, vendo as configuracoes como
+   * estavam antes e achando que o jogo as "reiniciou".
+   */
+  useEffect(() => {
+    if (!dirty) return
+    const aoSair = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      // Navegadores modernos ignoram o texto e mostram o aviso padrao, mas
+      // ainda exigem que returnValue seja definido para mostrar alguma coisa.
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', aoSair)
+    return () => window.removeEventListener('beforeunload', aoSair)
+  }, [dirty])
+
   // Mexer em qualquer coisa apaga o aviso: ele diz respeito ao que foi
   // gravado, nao ao que esta na tela agora.
   useEffect(() => {
@@ -85,9 +106,16 @@ export function SettingsScreen({ onBack }: Props) {
   const conflicts = findConflicts(settings.keyBindings)
 
   const salvar = () => {
+    const nome = settingsStore.get().profileName
     settingsStore.save()
     uiSounds.play('select')
     setSalvo(true)
+    // Com conta conectada o nome e UM so: o do perfil, que e o que o ranking
+    // mundial e o lobby mostram. Gravar so no navegador deixaria o jogador
+    // com dois nomes diferentes e nenhuma pista de qual vale onde.
+    if (auth.session && nome.trim() && nome.trim() !== (auth.displayName ?? '')) {
+      void auth.updateDisplayName(nome)
+    }
   }
 
   const voltar = () => {
@@ -149,7 +177,9 @@ export function SettingsScreen({ onBack }: Props) {
             <section className="panel settings-group">
               <h3>Perfil</h3>
               <div className="field">
-                <label htmlFor="profile-name">Nome do jogador</label>
+                <label htmlFor="profile-name">
+                  {auth.session ? 'Nome da conta' : 'Nome do jogador'}
+                </label>
                 <input
                   id="profile-name"
                   type="text"
@@ -158,9 +188,18 @@ export function SettingsScreen({ onBack }: Props) {
                   onChange={(event) => settingsStore.update({ profileName: event.target.value })}
                 />
               </div>
-              <p className="note">
-                É o nome que os outros jogadores veem no lobby e no placar do multiplayer.
-              </p>
+              {auth.session ? (
+                <p className="note">
+                  Com a conta conectada este é o seu nome em tudo: no lobby, no placar do
+                  multiplayer e no <strong>ranking mundial</strong>. Salvar renomeia a conta.
+                </p>
+              ) : (
+                <p className="note">
+                  É o nome que os outros jogadores veem no lobby e no placar do multiplayer. Ao
+                  conectar uma conta, o nome dela passa a valer no lugar deste.
+                </p>
+              )}
+              {auth.error && <div className="error-box">{auth.error}</div>}
             </section>
 
             <section className="panel settings-group">
