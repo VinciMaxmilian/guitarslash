@@ -1125,7 +1125,18 @@ h3 {
   border: 1px solid rgba(217, 154, 43, 0.45);
   background: rgba(217, 154, 43, 0.12);
   padding: 4px 9px;
-  animation: pulse 1.4s ease-in-out infinite alternate;
+  /* Keyframe proprio: `pulse` e redefinido pelo tema riff-riot com `scale`,
+     e um selo de texto pulando de tamanho fica inquieto demais. */
+  animation: settings-blink 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes settings-blink {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .settings-saved {

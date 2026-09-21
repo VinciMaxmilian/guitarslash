@@ -183,6 +183,16 @@ class PlayerSession:
         #: Espectador nao bloqueia o inicio: entrou com a partida rolando.
         self.spectator = False
         self.last_seen = time.monotonic()
+        #: Placar da SALA, acumulado entre as partidas (so conta no versus).
+        #:
+        #: Vive no jogador, e nao num dicionario da sala, porque cada JOIN cria
+        #: um id novo: um dicionario por id viraria lixo a cada reconexao, e um
+        #: por nome deixaria dois jogadores homonimos dividirem o mesmo placar.
+        self.wins = 0
+        self.ties = 0
+        self.matches = 0
+        #: Soma dos pontos que ele fez nas partidas da sala.
+        self.total_points = 0
 
     def touch(self) -> None:
         self.last_seen = time.monotonic()
@@ -382,6 +392,50 @@ class Room:
         payload["mixedDifficulty"] = len(difficulties) > 1
         return payload
 
+    def record_match(self, payload: dict) -> None:
+        """Fecha a partida no placar da sala.
+
+        So no versus: em co-op nao ha vencedor, a banda inteira faz um score
+        so, e uma coluna de vitorias nao significaria nada.
+
+        Empate nao da vitoria a ninguem - e contado a parte, senao dois
+        empates pareceriam uma vitoria de cada.
+        """
+        if self.mode != "versus":
+            return
+
+        winner = payload.get("winnerId")
+        empate = bool(payload.get("tie"))
+        for player in self.players:
+            if player.spectator:
+                continue
+            player.matches += 1
+            player.total_points += int(player.score.score)
+            if empate:
+                player.ties += 1
+            elif player.id == winner:
+                player.wins += 1
+
+    def standings(self) -> list[dict]:
+        """Placar acumulado da sala, do primeiro para o ultimo."""
+        linhas = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "wins": p.wins,
+                "ties": p.ties,
+                "matches": p.matches,
+                "points": p.total_points,
+                "connected": p.connected,
+            }
+            for p in self.players
+            if p.matches > 0
+        ]
+        # Vitorias mandam; pontos so desempatam. Quem ganha duas partidas
+        # apertadas esta na frente de quem ganhou uma por muito.
+        linhas.sort(key=lambda r: (r["wins"], r["points"]), reverse=True)
+        return linhas
+
     # ------------------------------------------------------------- ciclo da sala
 
     async def begin_load_if_ready(self) -> None:
@@ -426,6 +480,11 @@ class Room:
         self.phase = "results"
         self.start_at = None
         payload = self.results()
+        # A ordem importa: o placar da sala so pode contar esta partida depois
+        # que o vencedor dela foi decidido.
+        self.record_match(payload)
+        if self.mode == "versus":
+            payload["standings"] = self.standings()
         await self.send_state()
         await self.broadcast("RESULTS", payload)
 

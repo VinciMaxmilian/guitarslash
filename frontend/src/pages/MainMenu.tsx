@@ -16,6 +16,7 @@ interface Props {
   onSettings: () => void
   onMultiplayer: () => void
   onTraining: () => void
+  onLeaderboard: () => void
   onAccount: () => void
   /** false = nuvem nao configurada. O item aparece MESMO ASSIM, desligado com
    *  explicacao: item que desaparece deixa o jogador procurando algo que nao
@@ -35,6 +36,7 @@ export function MainMenu({
   onSettings,
   onMultiplayer,
   onTraining,
+  onLeaderboard,
   onAccount,
   accountAvailable,
   accountName,
@@ -55,6 +57,7 @@ export function MainMenu({
         : 'Servidor de partidas nao configurado neste build (VITE_WS_URL) e a pagina nao vem de um host de LAN',
     },
     { label: 'TRAINING', action: onTraining, cls: 'menu-item-5', disabled: false },
+    { label: 'LEADERBOARD', action: onLeaderboard, cls: 'menu-item-7', disabled: false },
     { label: 'OPTIONS', action: onSettings, cls: 'menu-item-6', disabled: false },
     {
       label: accountName ? accountName.toUpperCase() : 'LOGIN',

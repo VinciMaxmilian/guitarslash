@@ -17,6 +17,7 @@ import type { TrainingOptions } from './game/GameEngine'
 import { useAuth } from './auth/useAuth'
 import { submitScore } from './lib/scores'
 import { useSettingsSync } from './settings/useSettingsSync'
+import { Leaderboard } from './pages/Leaderboard'
 import { Lobby } from './pages/Lobby'
 import { MultiplayerStart } from './pages/MultiplayerStart'
 import type { PlayerSnapshot, Chart } from './game/types'
@@ -39,6 +40,7 @@ type Screen =
   | 'auth'
   | 'upload'
   | 'training'
+  | 'leaderboard'
 
 export function App() {
   const settings = useSettings()
@@ -154,7 +156,15 @@ export function App() {
             loadedFor.current = null
             setScreen('songs')
           }}
+          onLeaderboard={() => setScreen('leaderboard')}
           onMultiplayer={() => setScreen('mp-start')}
+        />
+      )}
+
+      {screen === 'leaderboard' && (
+        <Leaderboard
+          userId={auth.session?.user?.id ?? null}
+          onBack={() => setScreen('menu')}
         />
       )}
 

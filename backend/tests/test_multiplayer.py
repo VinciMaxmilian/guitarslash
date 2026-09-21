@@ -285,6 +285,86 @@ def test_fluxo_completo_lobby_ate_resultados(client: TestClient):
         assert sala().phase == "results"
 
 
+def _jogar_partida(ws_a, ws_b, score_a: int, score_b: int) -> dict:
+    """Uma partida inteira entre dois jogadores ja preparados.
+
+    Devolve o RESULTS visto por Ana.
+    """
+    for ws in (ws_a, ws_b):
+        send(ws, "SET_READY", ready=True)
+    drain_until(ws_b, "BEGIN_LOAD")
+    for ws in (ws_a, ws_b):
+        send(ws, "LOAD_PROGRESS", progress=1.0)
+    drain_until(ws_a, "START_AT")
+    send(ws_a, "FINISHED", score=score_a, accuracy=0.9, maxCombo=40, notesHit=90)
+    send(ws_b, "FINISHED", score=score_b, accuracy=0.8, maxCombo=30, notesHit=80)
+    return drain_until(ws_a, "RESULTS")
+
+
+def test_placar_da_sala_acumula_entre_as_partidas(client: TestClient):
+    with client.websocket_connect("/ws") as ws_a, client.websocket_connect("/ws") as ws_b:
+        me_a, me_b = prepare(ws_a, ws_b)
+        send(ws_a, "SELECT_SONG", songId="musica-1", mode="versus")
+
+        primeira = _jogar_partida(ws_a, ws_b, score_a=5000, score_b=9000)
+        assert primeira["winnerId"] == me_b["playerId"]
+        placar = {linha["id"]: linha for linha in primeira["standings"]}
+        assert placar[me_b["playerId"]]["wins"] == 1
+        assert placar[me_a["playerId"]]["wins"] == 0
+        assert placar[me_a["playerId"]]["points"] == 5000
+
+        # Segunda partida: Ana ganha, e o placar soma em vez de reiniciar.
+        send(ws_a, "RETURN_TO_LOBBY")
+        drain_until(ws_a, "ROOM_STATE")
+        segunda = _jogar_partida(ws_a, ws_b, score_a=12000, score_b=1000)
+        assert segunda["winnerId"] == me_a["playerId"]
+
+        placar = {linha["id"]: linha for linha in segunda["standings"]}
+        assert placar[me_a["playerId"]]["wins"] == 1
+        assert placar[me_b["playerId"]]["wins"] == 1
+        assert placar[me_a["playerId"]]["matches"] == 2
+        assert placar[me_a["playerId"]]["points"] == 5000 + 12000
+        assert placar[me_b["playerId"]]["points"] == 9000 + 1000
+        # Empatados em vitorias, os pontos desempatam.
+        assert segunda["standings"][0]["id"] == me_a["playerId"]
+
+
+def test_empate_nao_da_vitoria_a_ninguem(client: TestClient):
+    with client.websocket_connect("/ws") as ws_a, client.websocket_connect("/ws") as ws_b:
+        me_a, me_b = prepare(ws_a, ws_b)
+        send(ws_a, "SELECT_SONG", songId="musica-1", mode="versus")
+
+        # Mesmos numeros nos dois: todos os criterios de desempate empatam.
+        for ws in (ws_a, ws_b):
+            send(ws, "SET_READY", ready=True)
+        drain_until(ws_b, "BEGIN_LOAD")
+        for ws in (ws_a, ws_b):
+            send(ws, "LOAD_PROGRESS", progress=1.0)
+        drain_until(ws_a, "START_AT")
+        for ws in (ws_a, ws_b):
+            send(ws, "FINISHED", score=7000, accuracy=0.9, maxCombo=40, notesHit=90)
+
+        results = drain_until(ws_a, "RESULTS")
+        assert results["tie"] is True
+        placar = {linha["id"]: linha for linha in results["standings"]}
+        assert placar[me_a["playerId"]]["wins"] == 0
+        assert placar[me_b["playerId"]]["wins"] == 0
+        assert placar[me_a["playerId"]]["ties"] == 1
+        assert placar[me_b["playerId"]]["ties"] == 1
+
+
+def test_coop_nao_tem_placar_de_vitorias(client: TestClient):
+    with client.websocket_connect("/ws") as ws_a, client.websocket_connect("/ws") as ws_b:
+        prepare(ws_a, ws_b)
+        send(ws_a, "SELECT_SONG", songId="musica-1", mode="coop")
+
+        results = _jogar_partida(ws_a, ws_b, score_a=5000, score_b=9000)
+        assert results["mode"] == "coop"
+        # Em co-op a banda faz um score so: contar vitorias nao significa nada.
+        assert "standings" not in results
+        assert results["bandScore"] == 14000
+
+
 def test_ready_parcial_nao_comeca_o_carregamento(client: TestClient):
     with client.websocket_connect("/ws") as ws_a, client.websocket_connect("/ws") as ws_b:
         prepare(ws_a, ws_b)

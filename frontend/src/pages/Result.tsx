@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/types'
-import type { MPResults } from '../game/multiplayerProtocol'
+import type { MPResults, MPStandingRow } from '../game/multiplayerProtocol'
 import type { MultiplayerSession } from '../game/useMultiplayer'
 import type { PlayerSnapshot } from '../game/types'
 import { formatNumber, formatPercent } from '../utils/format'
@@ -60,9 +60,7 @@ export function Result({
 
       {results && <MultiplayerResults results={results} selfId={mp?.selfId ?? null} />}
 
-      {/* Leaderboard so em partida solo: em LAN o placar que interessa e o
-          da sala, que ja aparece acima. */}
-      {CLOUD_ENABLED && !mp && (
+      {CLOUD_ENABLED && (
         <Leaderboard
           songId={song.id}
           instrument={instrument}
@@ -138,6 +136,7 @@ function MultiplayerResults({
         </div>
       )}
 
+      <div className="mp-section">Esta partida</div>
       <table className="mp-table">
         <thead>
           <tr>
@@ -171,7 +170,56 @@ function MultiplayerResults({
           ))}
         </tbody>
       </table>
+
+      {/* Placar da SALA. So no versus: em co-op a banda faz um score so, e
+          uma coluna de vitorias nao significaria nada. */}
+      {!coop && results.standings && results.standings.length > 0 && (
+        <Standings rows={results.standings} selfId={selfId} />
+      )}
     </div>
+  )
+}
+
+/** Quem esta ganhando a NOITE, e nao so a ultima musica. */
+function Standings({ rows, selfId }: { rows: MPStandingRow[]; selfId: string | null }) {
+  // Com uma partida so jogada, a tabela nao diz nada que a de cima ja nao
+  // tenha dito. Ela aparece quando passa a haver historico.
+  const partidas = Math.max(...rows.map((row) => row.matches))
+  if (partidas < 2) return null
+
+  return (
+    <>
+      <div className="mp-section">
+        Placar da sala · {partidas} partida{partidas > 1 ? 's' : ''}
+      </div>
+      <table className="mp-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Jogador</th>
+            <th style={{ textAlign: 'right' }}>Vitórias</th>
+            <th style={{ textAlign: 'right' }}>Empates</th>
+            <th style={{ textAlign: 'right' }}>Partidas</th>
+            <th style={{ textAlign: 'right' }}>Pontos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={row.id} className={row.id === selfId ? 'self' : ''}>
+              <td className="mp-rank">{index + 1}</td>
+              <td>
+                {row.name}
+                {!row.connected && ' (CAIU)'}
+              </td>
+              <td className="num">{formatNumber(row.wins)}</td>
+              <td className="num">{formatNumber(row.ties)}</td>
+              <td className="num">{formatNumber(row.matches)}</td>
+              <td className="num">{formatNumber(row.points)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   )
 }
 

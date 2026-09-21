@@ -93,10 +93,29 @@ export interface MPResultRow extends MPScoreState {
   connected: boolean
 }
 
+/**
+ * Uma linha do placar acumulado da SALA, entre partidas.
+ *
+ * So existe no versus: em co-op a banda faz um score so, e uma coluna de
+ * vitorias nao significaria nada.
+ */
+export interface MPStandingRow {
+  id: string
+  name: string
+  wins: number
+  ties: number
+  matches: number
+  /** Soma dos pontos que ele fez nas partidas desta sala. */
+  points: number
+  connected: boolean
+}
+
 export interface MPResults {
   mode: RoomMode
   songId: string | null
   players: MPResultRow[]
+  /** Versus: placar acumulado da sala, do primeiro para o ultimo. */
+  standings?: MPStandingRow[]
   /** Versus: quem ganhou. */
   winnerId?: string | null
   /** Versus: empate depois de todos os critErios de desempate. */

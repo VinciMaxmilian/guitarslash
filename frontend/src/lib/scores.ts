@@ -25,6 +25,31 @@ export interface ScoreTarget {
   difficulty: string
 }
 
+/** Uma linha do ranking geral. */
+export interface TotalRow {
+  user_id: string
+  display_name: string
+  /** Soma do melhor placar do jogador em cada musica. */
+  total_score: number
+  /** Quantas musicas distintas entraram na soma. */
+  songs: number
+  accuracy: number
+  stars: number
+  last_played: string
+}
+
+/**
+ * Filtros do ranking geral. Campo ausente/vazio = sem filtro.
+ *
+ * Os tres sao independentes de proposito: "expert, qualquer musica" e uma
+ * pergunta tao legitima quanto "esta musica, qualquer dificuldade".
+ */
+export interface TotalsFilter {
+  songId?: string | null
+  instrument?: string | null
+  difficulty?: string | null
+}
+
 /** Constroi a linha de `scores` a partir do snapshot do fim da musica. */
 export function scoreRow(
   userId: string,
@@ -81,4 +106,32 @@ export async function fetchLeaderboard(
     return []
   }
   return (data ?? []) as LeaderboardRow[]
+}
+
+/**
+ * Ranking geral, somando as musicas.
+ *
+ * A soma acontece NO BANCO (funcao `leaderboard_totals`, migration 0006). Ela
+ * nao pode vir para ca: somar no navegador exigiria baixar a tabela `scores`
+ * inteira, que cresce uma linha por partida terminada, de todos os jogadores.
+ */
+export async function fetchTotals(
+  filter: TotalsFilter = {},
+  limit = 50,
+): Promise<TotalRow[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase.rpc('leaderboard_totals', {
+    // `null` e o valor que a funcao entende como "sem filtro"; string vazia
+    // viraria um filtro por musica de nome vazio, que nao acha nada.
+    p_song: filter.songId || null,
+    p_instrument: filter.instrument || null,
+    p_difficulty: filter.difficulty || null,
+    p_limit: limit,
+  })
+
+  if (error) {
+    console.warn('[guitarslash] nao foi possivel ler o ranking geral:', error.message)
+    return []
+  }
+  return (data ?? []) as TotalRow[]
 }
