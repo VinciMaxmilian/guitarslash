@@ -810,14 +810,21 @@ h3 {
   object-fit: cover;
 }
 
+/*
+ * Fundo de quando a musica nao tem video.
+ *
+ * Escuro e QUASE neutro, com so um respingo de luz de palco nas bordas. Um
+ * fundo ambar forte tingia a highway inteira por tras do canvas e era metade
+ * do motivo de a pista parecer marrom em vez de preta.
+ */
 .gameplay-fallback {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(65% 55% at 50% 100%, rgba(226, 89, 28, 0.35), transparent 70%),
-    radial-gradient(45% 45% at 15% 5%, rgba(217, 154, 43, 0.22), transparent 70%),
-    radial-gradient(45% 45% at 85% 5%, rgba(156, 58, 23, 0.25), transparent 70%),
-    linear-gradient(180deg, #2a1a0e, #060302);
+    radial-gradient(60% 50% at 50% 100%, rgba(226, 89, 28, 0.14), transparent 72%),
+    radial-gradient(42% 42% at 12% 4%, rgba(120, 150, 200, 0.1), transparent 70%),
+    radial-gradient(42% 42% at 88% 4%, rgba(156, 58, 23, 0.1), transparent 70%),
+    linear-gradient(180deg, #0d0d11, #040406);
 }
 
 .gameplay-fallback::after {

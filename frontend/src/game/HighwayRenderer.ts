@@ -165,23 +165,28 @@ export class HighwayRenderer {
       floor.addColorStop(0.55, 'rgba(18, 52, 74, 0.8)')
       floor.addColorStop(1, 'rgba(40, 104, 132, 0.92)')
     } else {
-      floor.addColorStop(0, 'rgba(10, 6, 3, 0.55)')
-      floor.addColorStop(0.55, 'rgba(20, 12, 6, 0.82)')
-      floor.addColorStop(1, 'rgba(34, 19, 9, 0.94)')
+      // Quase preto e NEUTRO. A pista da referencia nao tem cor propria: ela
+      // e o fundo escuro contra o qual as cinco cores das notas aparecem.
+      // Um piso marrom tinge tudo e come o contraste das notas.
+      floor.addColorStop(0, 'rgba(6, 6, 8, 0.62)')
+      floor.addColorStop(0.55, 'rgba(12, 12, 15, 0.88)')
+      floor.addColorStop(1, 'rgba(18, 18, 22, 0.96)')
     }
     ctx.fillStyle = floor
     ctx.fill(path)
 
-    // Cada lane recebe um leve brilho da propria cor, para a pista nao ficar
-    // morta antes das notas chegarem.
+    // Cada lane recebe um respingo da propria cor JUNTO DA HIT LINE, e nada
+    // mais. Antes o degrade subia por metade da pista e pintava a lane
+    // inteira: a nota chegava sobre um fundo da mesma cor dela e perdia a
+    // leitura, que e exatamente o que a pista preta da referencia protege.
     ctx.save()
     ctx.clip(path)
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const display = options.leftyFlip ? LANE_COUNT - 1 - lane : lane
       const color = options.noteColors[lane] ?? '#ffffff'
-      const glow = ctx.createLinearGradient(0, nearY, 0, farY)
-      glow.addColorStop(0, hexToRgba(color, 0.22))
-      glow.addColorStop(0.35, hexToRgba(color, 0.06))
+      const glow = ctx.createLinearGradient(0, nearY, 0, geo.yAt(0.22))
+      glow.addColorStop(0, hexToRgba(color, 0.12))
+      glow.addColorStop(0.45, hexToRgba(color, 0.03))
       glow.addColorStop(1, 'rgba(0,0,0,0)')
       ctx.fillStyle = glow
       ctx.beginPath()
@@ -234,7 +239,7 @@ export class HighwayRenderer {
 
     // Neblina no fundo: esconde o ponto de fuga e da profundidade.
     const fog = ctx.createLinearGradient(0, farY, 0, farY + (nearY - farY) * 0.34)
-    fog.addColorStop(0, starPower ? 'rgba(6, 18, 28, 0.95)' : 'rgba(8, 4, 2, 0.95)')
+    fog.addColorStop(0, starPower ? 'rgba(6, 18, 28, 0.95)' : 'rgba(5, 5, 7, 0.95)')
     fog.addColorStop(1, 'rgba(0, 0, 0, 0)')
     ctx.fillStyle = fog
     ctx.fill(path)
@@ -243,11 +248,11 @@ export class HighwayRenderer {
     // Divisorias das lanes. Na referencia elas sao claras e bem visiveis ao
     // longo de toda a pista - sao elas que vendem a perspectiva.
     const divider = ctx.createLinearGradient(0, nearY, 0, farY)
-    divider.addColorStop(0, 'rgba(246, 240, 224, 0.85)')
-    divider.addColorStop(0.45, 'rgba(246, 240, 224, 0.4)')
-    divider.addColorStop(1, 'rgba(246, 240, 224, 0.04)')
+    divider.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+    divider.addColorStop(0.45, 'rgba(235, 240, 248, 0.45)')
+    divider.addColorStop(1, 'rgba(220, 230, 245, 0.05)')
     ctx.strokeStyle = divider
-    ctx.lineWidth = Math.max(1.5, geo.viewport.width * 0.0022)
+    ctx.lineWidth = Math.max(1.2, geo.viewport.width * 0.0016)
     ctx.lineCap = 'round'
     ctx.beginPath()
     for (let lane = 1; lane < LANE_COUNT; lane++) {
@@ -259,9 +264,13 @@ export class HighwayRenderer {
 
     // Trilhos laterais. Ficam mais quentes conforme o multiplicador sobe.
     const heat = Math.min(1, (session.score.multiplier - 1) / 3)
-    const railColor = starPower
-      ? 'rgba(207, 233, 242, 0.95)'
-      : `rgba(${Math.round(217 + heat * 30)}, ${Math.round(154 - heat * 40)}, ${Math.round(43 + heat * 10)}, ${0.7 + heat * 0.3})`
+    // O trilho e BRANCO, como na referencia. O multiplicador nao muda a cor
+    // dele - muda o halo em volta (`heatGlow`). Trilho dourado puxava a pista
+    // inteira para o ambar e era metade do problema do tom quente.
+    const railColor = starPower ? 'rgba(207, 233, 242, 0.98)' : 'rgba(248, 250, 255, 0.95)'
+    const heatGlow = starPower
+      ? 'rgba(150, 220, 255, 0.9)'
+      : `rgba(255, ${Math.round(220 - heat * 90)}, ${Math.round(170 - heat * 130)}, ${0.5 + heat * 0.5})`
 
     const espessura = Math.max(2.5, geo.viewport.width * 0.0045)
 
@@ -281,8 +290,8 @@ export class HighwayRenderer {
     ctx.lineWidth = espessura
     ctx.strokeStyle = railColor
     if (options.effects !== 'low') {
-      ctx.shadowBlur = 16 + heat * 14
-      ctx.shadowColor = railColor
+      ctx.shadowBlur = 14 + heat * 20
+      ctx.shadowColor = heatGlow
     }
     ctx.beginPath()
     ctx.moveTo(nearLeft, nearY)
@@ -320,7 +329,7 @@ export class HighwayRenderer {
       if (t > 1) break
       const y = geo.yAt(t)
       // Linhas somem ao longe, junto com a neblina.
-      ctx.strokeStyle = `rgba(236, 228, 207, ${0.16 * (1 - t) + 0.02})`
+      ctx.strokeStyle = `rgba(226, 234, 248, ${0.18 * (1 - t) + 0.02})`
       ctx.beginPath()
       ctx.moveTo(geo.xAt(-0.5, t), y)
       ctx.lineTo(geo.xAt(LANE_COUNT - 0.5, t), y)
@@ -333,14 +342,17 @@ export class HighwayRenderer {
     if (session.heldLanes.size === 0) return
     const ctx = this.ctx
     const nearY = geo.yAt(0)
-    const topT = 0.42
+    // Curta e discreta: e uma confirmacao de que o traste esta apertado, nao
+    // um holofote. Subindo por 0.42 da pista com alpha 0.42, ela banhava de
+    // cor justamente a faixa onde as notas precisam ser lidas.
+    const topT = 0.26
     const topYLocal = geo.yAt(topT)
 
     for (const lane of session.heldLanes) {
       const display = options.leftyFlip ? LANE_COUNT - 1 - lane : lane
       const color = options.noteColors[lane] ?? '#ffffff'
       const gradient = ctx.createLinearGradient(0, nearY, 0, topYLocal)
-      gradient.addColorStop(0, hexToRgba(color, 0.42))
+      gradient.addColorStop(0, hexToRgba(color, 0.26))
       gradient.addColorStop(1, 'rgba(0,0,0,0)')
 
       this.alpha(1)
@@ -472,7 +484,7 @@ export class HighwayRenderer {
   ): void {
     if (toT <= fromT) return
     const ctx = this.ctx
-    const widthNear = geo.laneWidth * (active ? 0.34 : 0.28)
+    const widthNear = geo.laneWidth * (active ? 0.26 : 0.2)
     const yFrom = geo.yAt(fromT)
     const yTo = geo.yAt(toT)
     const xFrom = geo.xAt(lane, fromT)
@@ -532,9 +544,13 @@ export class HighwayRenderer {
     const y = geo.yAt(t)
     // Gema mais alta que o retangulo achatado anterior: e o que da a leitura
     // de "botao" da referencia, em vez de um tijolo deitado.
-    const width = geo.laneWidth * 0.86 * scale
-    const height = width * 0.74
-    const radius = height * 0.5
+    // Proporcao da referencia: a nota ocupa quase a lane inteira e e BAIXA.
+    // Antes era 0.74 de altura com raio de meia altura, o que a fechava numa
+    // pilula - forma que nao existe no jogo de referencia e que, junto com o
+    // aro grosso, e o que dava o aspecto de balinha.
+    const width = geo.laneWidth * 0.94 * scale
+    const height = width * 0.54
+    const radius = height * 0.3
 
     // Sombra no piso: e o que "assenta" a nota na pista.
     this.alpha(0.42 * fade)
@@ -554,12 +570,12 @@ export class HighwayRenderer {
 
     // Aro externo escuro: separa a gema da pista, como no jogo de referencia.
     roundedRect(ctx, x - width / 2, y - height / 2, width, height, radius)
-    ctx.fillStyle = 'rgba(8, 5, 3, 0.92)'
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.94)'
     ctx.fill()
     ctx.shadowBlur = 0
 
     // Anel colorido.
-    const ringWidth = Math.max(1.6, width * 0.13)
+    const ringWidth = Math.max(1.4, width * 0.1)
     roundedRect(
       ctx,
       x - width / 2 + ringWidth * 0.5,
@@ -674,7 +690,7 @@ export class HighwayRenderer {
         ctx.shadowBlur = 12 * scale
         ctx.shadowColor = 'rgba(210, 245, 255, 0.95)'
       }
-      starPath(ctx, x, y, width * 0.3, height * 0.34)
+      starPath(ctx, x, y, width * 0.26, height * 0.4)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
       ctx.fill()
       ctx.shadowBlur = 0
@@ -708,15 +724,17 @@ export class HighwayRenderer {
     // Barra metalica sob os trastes.
     this.alpha(1)
     const bar = ctx.createLinearGradient(0, y - thickness / 2, 0, y + thickness / 2)
-    bar.addColorStop(0, starPower ? 'rgba(180, 225, 240, 0.95)' : 'rgba(120, 92, 54, 0.95)')
-    bar.addColorStop(0.45, starPower ? 'rgba(236, 249, 255, 1)' : 'rgba(236, 228, 207, 0.95)')
-    bar.addColorStop(1, starPower ? 'rgba(90, 150, 180, 0.9)' : 'rgba(58, 36, 19, 0.95)')
+    // Prata, nao bronze: e a barra que diz QUANDO tocar, e ela precisa ser a
+    // coisa mais clara da pista em qualquer fundo.
+    bar.addColorStop(0, starPower ? 'rgba(180, 225, 240, 0.95)' : 'rgba(150, 156, 168, 0.95)')
+    bar.addColorStop(0.45, starPower ? 'rgba(236, 249, 255, 1)' : 'rgba(250, 252, 255, 1)')
+    bar.addColorStop(1, starPower ? 'rgba(90, 150, 180, 0.9)' : 'rgba(64, 68, 78, 0.95)')
     ctx.fillStyle = bar
     ctx.fillRect(left, y - thickness / 2, right - left, thickness)
 
     if (options.effects !== 'low') {
       this.alpha(0.8)
-      ctx.strokeStyle = starPower ? 'rgba(236, 249, 255, 0.9)' : 'rgba(255, 210, 120, 0.85)'
+      ctx.strokeStyle = starPower ? 'rgba(236, 249, 255, 0.9)' : 'rgba(255, 255, 255, 0.9)'
       ctx.lineWidth = 2
       ctx.shadowBlur = 22
       ctx.shadowColor = ctx.strokeStyle
@@ -760,8 +778,11 @@ export class HighwayRenderer {
       const chegada = fretArrival(options.reveal, lane, LANE_COUNT)
       if (chegada.alpha <= 0) continue
 
-      const radiusX = geo.laneWidth * (0.46 + punch * 0.1) * chegada.scale
-      const radiusY = radiusX * 0.46
+      // Antes era 0.46 da lane: os aneis encostavam um no outro e tapavam a
+      // barra da hit line, que e justamente a referencia visual de QUANDO
+      // tocar. Na referencia o traste e bem menor que a lane.
+      const radiusX = geo.laneWidth * (0.34 + punch * 0.07) * chegada.scale
+      const radiusY = radiusX * 0.5
       const press = held ? radiusY * 0.2 : 0
       const aceso = held || punch > 0
       // O deslocamento e em fracao do raio, entao o pulo acompanha a escala
@@ -782,15 +803,15 @@ export class HighwayRenderer {
 
       // Poco escuro sob o traste: da relevo ao botao.
       this.alpha(chegada.alpha)
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.62)'
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
       ctx.beginPath()
-      ctx.ellipse(x, cy + radiusY * 0.5, radiusX * 1.16, radiusY * 1.2, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, cy + radiusY * 0.45, radiusX * 1.1, radiusY * 1.14, 0, 0, Math.PI * 2)
       ctx.fill()
 
-      // Aro externo escuro.
-      ctx.fillStyle = 'rgba(10, 7, 4, 0.95)'
+      // Aro externo preto neutro.
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.96)'
       ctx.beginPath()
-      ctx.ellipse(x, cy + press, radiusX * 1.1, radiusY * 1.12, 0, 0, Math.PI * 2)
+      ctx.ellipse(x, cy + press, radiusX * 1.06, radiusY * 1.08, 0, 0, Math.PI * 2)
       ctx.fill()
 
       // Miolo.
@@ -807,9 +828,12 @@ export class HighwayRenderer {
         fill.addColorStop(0.35, lighten(color, 0.6))
         fill.addColorStop(1, darken(color, 0.3))
       } else {
-        fill.addColorStop(0, hexToRgba(color, 0.3))
-        fill.addColorStop(0.7, hexToRgba(color, 0.1))
-        fill.addColorStop(1, 'rgba(12, 8, 4, 0.9)')
+        // Apagado e quase preto: o traste da referencia so ACENDE quando
+        // apertado. Miolo permanentemente colorido competia com a nota que
+        // chega e tirava o "clique" visual do acerto.
+        fill.addColorStop(0, hexToRgba(color, 0.16))
+        fill.addColorStop(0.65, hexToRgba(color, 0.05))
+        fill.addColorStop(1, 'rgba(6, 6, 8, 0.95)')
       }
       ctx.fillStyle = fill
       ctx.beginPath()
@@ -817,7 +841,7 @@ export class HighwayRenderer {
       ctx.fill()
 
       // Anel colorido, grosso.
-      ctx.lineWidth = Math.max(2.8, radiusY * 0.42)
+      ctx.lineWidth = Math.max(2.2, radiusY * 0.34)
       ctx.strokeStyle = aceso ? lighten(color, 0.55) : color
       if (options.effects !== 'low' && aceso) {
         ctx.shadowBlur = 22 + punch * 26
