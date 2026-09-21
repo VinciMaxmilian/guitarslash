@@ -62,6 +62,21 @@ export class SettingsStore {
   private settings: Settings
   private listeners = new Set<Listener>()
 
+  /**
+   * Copia do que esta GRAVADO, enquanto a tela de configuracoes esta aberta.
+   *
+   * A tela precisa de um botao SALVAR, mas o jogador tambem precisa OUVIR o
+   * volume e VER a cor da nota enquanto arrasta o controle. As duas coisas so
+   * convivem se a alteracao valer na memoria na hora e so for para o disco no
+   * fim - por isso o rascunho mora AQUI, e nao numa copia dentro da tela: a
+   * engine, o leitor de controle e a previa de audio continuam lendo deste
+   * mesmo objeto, sem saber que ha uma edicao em curso.
+   *
+   * `null` = ninguem esta editando, e toda alteracao grava na hora (que e o
+   * comportamento do resto do jogo, como o volume mexido durante a partida).
+   */
+  private baseline: Settings | null = null
+
   constructor() {
     this.settings = load()
   }
@@ -70,17 +85,77 @@ export class SettingsStore {
     return this.settings
   }
 
-  subscribe(listener: Listener): () => void {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
+  /** Ha uma tela de configuracoes com rascunho aberto. */
+  get editing(): boolean {
+    return this.baseline !== null
+  }
+
+  /** Ha alteracao em rascunho que ainda nao foi gravada. */
+  get dirty(): boolean {
+    if (!this.baseline) return false
+    return JSON.stringify(this.baseline) !== JSON.stringify(this.settings)
+  }
+
+  /**
+   * Abre o rascunho: daqui ate `save`/`discard`/`endEdit` nada vai para o
+   * disco. Chamar duas vezes nao reabre - o baseline continua sendo o que
+   * estava gravado quando a edicao comecou.
+   */
+  beginEdit(): void {
+    if (this.baseline) return
+    this.baseline = structuredCloneSafe(this.settings)
+    this.notify()
+  }
+
+  /** Grava o rascunho. O baseline passa a ser o estado recem-gravado. */
+  save(): Settings {
+    persist(this.settings)
+    if (this.baseline) this.baseline = structuredCloneSafe(this.settings)
+    this.notify()
+    return this.settings
+  }
+
+  /** Joga fora o rascunho e volta ao que estava gravado, sem fechar a edicao. */
+  discard(): Settings {
+    if (this.baseline) {
+      this.settings = structuredCloneSafe(this.baseline)
+      this.notify()
+    }
+    return this.settings
+  }
+
+  /**
+   * Fecha a edicao. O que nao foi salvo e DESCARTADO: sair da tela sem salvar
+   * nao pode deixar meia configuracao valendo na memoria e outra metade no
+   * disco - na proxima abertura do jogo as duas discordariam.
+   */
+  endEdit(): Settings {
+    if (!this.baseline) return this.settings
+    const gravado = this.baseline
+    this.baseline = null
+    if (JSON.stringify(gravado) !== JSON.stringify(this.settings)) {
+      this.settings = gravado
+      this.notify()
+    }
+    return this.settings
   }
 
   /** Aplica uma alteracao parcial (merge raso por secao) e persiste. */
   update(patch: DeepPartial<Settings>): Settings {
     this.settings = validate(merge(this.settings, patch))
-    persist(this.settings)
-    for (const listener of this.listeners) listener(this.settings)
+    // Em rascunho a alteracao vale na memoria, mas nao no disco.
+    if (!this.baseline) persist(this.settings)
+    this.notify()
     return this.settings
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener(this.settings)
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
   }
 
   setBinding(action: keyof Settings['keyBindings'], code: string): Settings {
@@ -109,8 +184,9 @@ export class SettingsStore {
 
   reset(): Settings {
     this.settings = structuredCloneSafe(DEFAULT_SETTINGS)
-    persist(this.settings)
-    for (const listener of this.listeners) listener(this.settings)
+    // Restaurar o padrao dentro da tela tambem e rascunho: da para desistir.
+    if (!this.baseline) persist(this.settings)
+    this.notify()
     return this.settings
   }
 }

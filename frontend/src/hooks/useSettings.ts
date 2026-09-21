@@ -10,3 +10,18 @@ export function useSettings() {
     () => settingsStore.get(),
   )
 }
+
+/**
+ * Ha alteracao em rascunho ainda nao gravada?
+ *
+ * Usa a MESMA inscricao do `useSettings`: `dirty` so muda junto com as
+ * configuracoes, com `save` ou com `discard`, e os tres notificam os
+ * inscritos. Um booleano compara por valor, entao nao re-renderiza a toa.
+ */
+export function useSettingsDirty(): boolean {
+  return useSyncExternalStore(
+    (listener) => settingsStore.subscribe(listener),
+    () => settingsStore.dirty,
+    () => settingsStore.dirty,
+  )
+}

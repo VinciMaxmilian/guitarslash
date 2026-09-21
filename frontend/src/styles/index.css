@@ -1103,14 +1103,128 @@ h3 {
 
 /* ------------------------------------------------------------------ settings */
 
+/*
+ * Acoes do cabecalho.
+ *
+ * Salvar e Descartar so acendem quando ha rascunho: um botao permanentemente
+ * clicavel nao diz se a alteracao ja foi gravada, que e justamente a duvida
+ * que ele existe para responder.
+ */
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-badge {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-light);
+  border: 1px solid rgba(217, 154, 43, 0.45);
+  background: rgba(217, 154, 43, 0.12);
+  padding: 4px 9px;
+  animation: pulse 1.4s ease-in-out infinite alternate;
+}
+
+.settings-saved {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8fd6a4;
+}
+
+/* ------------------------------------------------------------ abas */
+
+.settings-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid rgba(217, 154, 43, 0.28);
+  padding-bottom: 0;
+}
+
+.settings-tab {
+  position: relative;
+  padding: 9px 18px;
+  border: 2px solid transparent;
+  border-bottom: none;
+  background: linear-gradient(180deg, rgba(43, 28, 16, 0.5), rgba(20, 12, 6, 0.2));
+  color: rgba(236, 228, 207, 0.6);
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  /* Cola a aba na linha do container: a borda de baixo e a da nav. */
+  margin-bottom: -2px;
+}
+
+.settings-tab:hover {
+  color: var(--bone);
+  background: linear-gradient(180deg, rgba(217, 154, 43, 0.14), rgba(20, 12, 6, 0.3));
+}
+
+.settings-tab.active {
+  border-color: rgba(217, 154, 43, 0.55);
+  background:
+    linear-gradient(180deg, rgba(226, 89, 28, 0.28), rgba(20, 12, 6, 0.9)),
+    var(--grain);
+  color: var(--gold-light);
+  text-shadow: 0 0 14px rgba(226, 89, 28, 0.6);
+}
+
+/* Tampa a linha da nav sob a aba ativa: e o que da o efeito de "pasta". */
+.settings-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: #140c06;
+}
+
+.settings-reset {
+  margin-left: auto;
+  align-self: center;
+}
+
 .settings-body {
   flex: 1;
   min-height: 0;
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
   align-content: start;
   padding-right: 6px;
+}
+
+/* Linha de botoes lado a lado dentro de um grupo. */
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Cada cor de lane com o nome embaixo: sem o nome, sao cinco quadrados. */
+.color-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.color-chip {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(236, 228, 207, 0.6);
+  cursor: pointer;
 }
 
 .settings-group {

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { DEFAULT_BINDINGS } from '../game/config'
 import { DEFAULT_GAMEPAD_BINDINGS } from '../game/gamepadProfiles'
 import { DEFAULT_SETTINGS, migrate, SettingsStore, validate } from './SettingsStore'
+import type { Settings } from './types'
 
 describe('validate', () => {
   it('repara cores invalidas mantendo as validas', () => {
@@ -186,3 +187,137 @@ describe('SettingsStore', () => {
     expect(store.get()).toEqual(DEFAULT_SETTINGS)
   })
 })
+
+describe('SettingsStore em rascunho', () => {
+  // Estes testes precisam olhar o DISCO, e nao so a memoria: a coisa toda que
+  // o rascunho faz e adiar a gravacao. O ambiente de teste roda em node, sem
+  // localStorage, entao ele e montado aqui - vazio a cada teste, senao um
+  // store novo nasceria com o que o teste anterior gravou.
+  beforeEach(() => {
+    const dados = new Map<string, string>()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (chave: string) => dados.get(chave) ?? null,
+        setItem: (chave: string, valor: string) => void dados.set(chave, valor),
+        removeItem: (chave: string) => void dados.delete(chave),
+        clear: () => dados.clear(),
+      },
+    })
+  })
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'localStorage')
+  })
+
+  it('fora da edicao grava na hora e nunca fica sujo', () => {
+    const store = new SettingsStore()
+    store.update({ profileName: 'Ana' })
+    expect(store.editing).toBe(false)
+    expect(store.dirty).toBe(false)
+    expect(readStorage()?.profileName).toBe('Ana')
+  })
+
+  it('em rascunho a alteracao vale na memoria mas nao no disco', () => {
+    const store = new SettingsStore()
+    store.save() // grava o estado inicial, para o disco ter com o que comparar
+    store.beginEdit()
+    store.update({ profileName: 'Ana' })
+
+    // A engine le daqui, e por isso a previa ao vivo funciona.
+    expect(store.get().profileName).toBe('Ana')
+    expect(store.dirty).toBe(true)
+    // O disco continua com o valor anterior ate o save.
+    expect(readStorage()?.profileName).toBe(DEFAULT_SETTINGS.profileName)
+  })
+
+  it('save grava e limpa o rascunho sem fechar a edicao', () => {
+    const store = new SettingsStore()
+    store.beginEdit()
+    store.update({ profileName: 'Ana' })
+    store.save()
+
+    expect(readStorage()?.profileName).toBe('Ana')
+    expect(store.dirty).toBe(false)
+    expect(store.editing).toBe(true)
+  })
+
+  it('discard volta ao que estava gravado e mantem a edicao aberta', () => {
+    const store = new SettingsStore()
+    store.beginEdit()
+    store.update({ profileName: 'Ana', gameplay: { noteSpeed: 9 } })
+    store.discard()
+
+    expect(store.get().profileName).toBe(DEFAULT_SETTINGS.profileName)
+    expect(store.get().gameplay.noteSpeed).toBe(DEFAULT_SETTINGS.gameplay.noteSpeed)
+    expect(store.dirty).toBe(false)
+    expect(store.editing).toBe(true)
+  })
+
+  it('endEdit descarta o que nao foi salvo', () => {
+    const store = new SettingsStore()
+    store.beginEdit()
+    store.update({ profileName: 'Ana' })
+    store.endEdit()
+
+    // Sair da tela sem salvar nao pode deixar o valor valendo na memoria: a
+    // memoria e o disco discordariam ate o proximo carregamento.
+    expect(store.get().profileName).toBe(DEFAULT_SETTINGS.profileName)
+    expect(store.editing).toBe(false)
+  })
+
+  it('endEdit preserva o que ja tinha sido salvo antes', () => {
+    const store = new SettingsStore()
+    store.beginEdit()
+    store.update({ profileName: 'Ana' })
+    store.save()
+    store.update({ profileName: 'Beto' }) // alteracao posterior, nao salva
+    store.endEdit()
+
+    expect(store.get().profileName).toBe('Ana')
+  })
+
+  it('reset dentro da edicao e rascunho: da para desistir', () => {
+    const store = new SettingsStore()
+    store.update({ gameplay: { noteSpeed: 9 } })
+    store.save()
+    store.beginEdit()
+    store.reset()
+
+    expect(store.get().gameplay.noteSpeed).toBe(DEFAULT_SETTINGS.gameplay.noteSpeed)
+    expect(readStorage()?.gameplay.noteSpeed).toBe(9)
+
+    store.discard()
+    expect(store.get().gameplay.noteSpeed).toBe(9)
+  })
+
+  it('beginEdit repetido nao move o ponto de partida', () => {
+    const store = new SettingsStore()
+    store.beginEdit()
+    store.update({ profileName: 'Ana' })
+    store.beginEdit() // um segundo efeito do React nao pode "aceitar" o rascunho
+    store.discard()
+
+    expect(store.get().profileName).toBe(DEFAULT_SETTINGS.profileName)
+  })
+
+  it('save e discard notificam os inscritos', () => {
+    const store = new SettingsStore()
+    store.beginEdit()
+    store.update({ profileName: 'Ana' })
+
+    let recebido = 0
+    store.subscribe(() => recebido++)
+    store.save()
+    expect(recebido).toBe(1)
+    store.update({ profileName: 'Beto' })
+    store.discard()
+    expect(recebido).toBe(3)
+  })
+})
+
+/** O que esta REALMENTE gravado, e nao o que o store tem em memoria. */
+function readStorage(): Settings | null {
+  const raw = localStorage.getItem('guitarslash.settings')
+  return raw ? (JSON.parse(raw) as Settings) : null
+}

@@ -73,6 +73,10 @@ export function useSettingsSync(session: Session | null): void {
     let timer: number | undefined
     const cancelar = settingsStore.subscribe(() => {
       if (aplicandoDaNuvem.current) return
+      // Rascunho nao vai para a nuvem: se fosse, sair da tela sem salvar
+      // deixaria na conta uma configuracao que nem no proprio navegador
+      // existe, e ela voltaria no proximo dispositivo.
+      if (settingsStore.dirty) return
       window.clearTimeout(timer)
       // Debounce: mexer num slider dispara dezenas de alteracoes, e cada uma
       // seria uma escrita no banco.
