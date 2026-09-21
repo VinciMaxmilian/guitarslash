@@ -51,12 +51,13 @@ function publicUrl(path: string): string | null {
 export function toSongSummary(row: CommunityRow): SongSummary {
   const audio: Record<string, string> = {}
   for (const [stem, caminho] of Object.entries(row.files ?? {})) {
-    if (stem === 'chart' || stem === 'cover' || stem === 'ini') continue
+    if (stem === 'chart' || stem === 'cover' || stem === 'ini' || stem === 'video') continue
     const url = publicUrl(`${row.storage_prefix}/${caminho}`)
     if (url) audio[stem] = url
   }
 
   const capa = row.files?.cover ? publicUrl(`${row.storage_prefix}/${row.files.cover}`) : null
+  const video = row.files?.video ? publicUrl(`${row.storage_prefix}/${row.files.video}`) : null
 
   return {
     id: row.slug,
@@ -72,13 +73,13 @@ export function toSongSummary(row: CommunityRow): SongSummary {
     instruments: row.instruments ?? {},
     assets: {
       cover: capa,
-      backgroundVideo: null,
+      backgroundVideo: video,
       chart: null,
       audio,
     },
     missing: [],
     hasCover: capa !== null,
-    hasBackgroundVideo: false,
+    hasBackgroundVideo: video !== null,
     source: 'community',
     chartPath: row.files?.chart ? `${row.storage_prefix}/${row.files.chart}` : undefined,
     uploaderId: row.uploader_id ?? undefined,
@@ -196,6 +197,9 @@ export async function uploadSong(
     ...pasta.audio.map((a) => ({ logico: stemName(a.name), arquivo: a.file })),
   ]
   if (pasta.cover) aEnviar.push({ logico: 'cover', arquivo: pasta.cover.file })
+  // O video e opcional e pesado, mas sem ele a musica joga contra um fundo
+  // preto - quem monta a pasta com background.mp4 espera ve-lo.
+  if (pasta.video) aEnviar.push({ logico: 'video', arquivo: pasta.video.file })
 
   const files: Record<string, string> = {}
   let enviados = 0

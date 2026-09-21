@@ -23,6 +23,8 @@ interface Viewport {
 type Geometry = ReturnType<HighwayRenderer['geometry']>
 
 const HIT_EFFECT = 0.34
+/** Prata azulado das notas de frase de star power. */
+const STAR_TINT = '#cfe9f2'
 const MISS_EFFECT = 0.4
 /** Tempo que a nota leva para sumir depois de passar da hit line. */
 const PASS_FADE = 0.09
@@ -128,6 +130,9 @@ export class HighwayRenderer {
     this.drawFrets(session, geo, options, songTime)
     this.drawMissEffects(session, geo, songTime)
     if (starPower) this.drawStarPowerGlow(geo, songTime)
+    // Por ULTIMO: o raio da frase passa por cima de tudo, inclusive dos
+    // trastes. E a recompensa, e ela tem de ser impossivel de nao ver.
+    this.drawStarPowerBursts(session, geo, options, songTime)
 
     ctx.globalAlpha = 1
     ctx.restore()
@@ -306,6 +311,8 @@ export class HighwayRenderer {
       type: string
       sustainT: number | null
       fade: number
+      /** Nota de uma frase de star power ainda inteira. */
+      star: boolean
     }
     const drawables: Drawable[] = []
     const activeSustains: Drawable[] = []
@@ -314,6 +321,10 @@ export class HighwayRenderer {
       const gate = gates[i]
       const t = (gate.time - songTime) / lookAhead
       if (t > 1.02) break
+
+      // Frase perdida volta a ser nota comum: manter a estrela prometeria uma
+      // energia que nao vem mais.
+      const star = gate.starPower && !gate.starPowerLost
 
       for (const state of gate.notes) {
         if (state.missed) continue
@@ -326,7 +337,15 @@ export class HighwayRenderer {
         if (state.hit) {
           // A cabeca some, o rabo do sustain continua enquanto segurado.
           if (state.sustainAlive && sustainT !== null && sustainT > 0) {
-            activeSustains.push({ t: 0, lane, color, type: state.note.type, sustainT, fade: 1 })
+            activeSustains.push({
+              t: 0,
+              lane,
+              color,
+              type: state.note.type,
+              sustainT,
+              fade: 1,
+              star,
+            })
           }
           continue
         }
@@ -336,7 +355,7 @@ export class HighwayRenderer {
         if (past > PASS_FADE) continue
         const fade = past > 0 ? 1 - past / PASS_FADE : 1
 
-        drawables.push({ t, lane, color, type: state.note.type, sustainT, fade })
+        drawables.push({ t, lane, color, type: state.note.type, sustainT, fade, star })
       }
     }
 
@@ -350,7 +369,7 @@ export class HighwayRenderer {
           item.lane,
           Math.max(item.t, 0),
           Math.min(item.sustainT, 1),
-          item.color,
+          item.star ? STAR_TINT : item.color,
           false,
           item.fade,
           options,
@@ -358,7 +377,16 @@ export class HighwayRenderer {
       }
     }
     for (const item of activeSustains) {
-      this.drawSustain(geo, item.lane, 0, Math.min(item.sustainT!, 1), item.color, true, 1, options)
+      this.drawSustain(
+        geo,
+        item.lane,
+        0,
+        Math.min(item.sustainT!, 1),
+        item.star ? STAR_TINT : item.color,
+        true,
+        1,
+        options,
+      )
     }
     for (const item of drawables) {
       this.drawNote(geo, item, options, starPower)
@@ -418,12 +446,22 @@ export class HighwayRenderer {
 
   private drawNote(
     geo: Geometry,
-    item: { t: number; lane: number; color: string; type: string; fade: number },
+    item: {
+      t: number
+      lane: number
+      color: string
+      type: string
+      fade: number
+      star: boolean
+    },
     options: RenderOptions,
     starPower: boolean,
   ): void {
     const ctx = this.ctx
-    const { t, lane, color, type, fade } = item
+    const { t, lane, color, type, fade, star } = item
+    // A nota de frase e prateada como a do star power ativo, mas pela marca
+    // da frase - e o unico jeito de ela se distinguir ANTES de ser acertada.
+    const prateada = starPower || star
     const scale = geo.scaleAt(t)
     const x = geo.xAt(lane, t)
     const y = geo.yAt(t)
@@ -442,8 +480,11 @@ export class HighwayRenderer {
 
     this.alpha(fade)
     if (options.effects !== 'low') {
-      ctx.shadowBlur = (options.effects === 'high' ? 24 : 13) * scale
-      ctx.shadowColor = starPower ? 'rgba(180, 240, 255, 0.9)' : color
+      const halo = (options.effects === 'high' ? 24 : 13) * scale
+      // A estrela brilha mais que a nota comum: e ela que o jogador precisa
+      // ver chegando de longe para se preparar para a frase.
+      ctx.shadowBlur = star ? halo * 1.5 : halo
+      ctx.shadowColor = prateada ? 'rgba(180, 240, 255, 0.9)' : color
     }
 
     // Aro externo escuro: separa a gema da pista, como no jogo de referencia.
@@ -463,7 +504,7 @@ export class HighwayRenderer {
       radius,
     )
     ctx.lineWidth = ringWidth
-    ctx.strokeStyle = starPower ? 'rgba(236, 249, 255, 0.98)' : lighten(color, 0.45)
+    ctx.strokeStyle = prateada ? 'rgba(236, 249, 255, 0.98)' : lighten(color, 0.45)
     ctx.stroke()
 
     // Domo interno.
@@ -488,7 +529,7 @@ export class HighwayRenderer {
       // Tap nota e "vazada": miolo escuro com a cor so no anel.
       body.addColorStop(0, 'rgba(58, 48, 36, 0.98)')
       body.addColorStop(1, 'rgba(14, 10, 7, 0.98)')
-    } else if (starPower) {
+    } else if (prateada) {
       body.addColorStop(0, '#ffffff')
       body.addColorStop(0.45, '#cfe9f2')
       body.addColorStop(1, '#5d93ad')
@@ -517,6 +558,25 @@ export class HighwayRenderer {
     gloss.addColorStop(1, 'rgba(255,255,255,0)')
     ctx.fillStyle = gloss
     ctx.fill()
+
+    // A estrela no miolo e a marca da frase. Ela vem DEPOIS do domo e ANTES
+    // do miolo de HOPO/tap nao ser desenhado: dentro de uma frase, a leitura
+    // que importa e "isto vale energia".
+    if (star) {
+      this.alpha(fade)
+      if (options.effects !== 'low') {
+        ctx.shadowBlur = 12 * scale
+        ctx.shadowColor = 'rgba(210, 245, 255, 0.95)'
+      }
+      starPath(ctx, x, y, width * 0.3, height * 0.34)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
+      ctx.fill()
+      ctx.shadowBlur = 0
+      ctx.lineWidth = Math.max(1, width * 0.035)
+      ctx.strokeStyle = 'rgba(120, 190, 220, 0.9)'
+      ctx.stroke()
+      return
+    }
 
     // HOPO ganha um miolo claro; tap, um ponto da propria cor. Leitura rapida.
     if (type !== 'normal') {
@@ -795,6 +855,123 @@ export class HighwayRenderer {
     session.misses.push(...alive)
   }
 
+  /**
+   * Raio que anuncia a frase de star power fechada.
+   *
+   * O desenho inteiro deriva de `songTime - burst.time`: nao ha contador por
+   * frame, entao queda de FPS encurta o efeito em vez de atrasar o jogo, e o
+   * loop do treino repete o raio no mesmo ponto da musica.
+   *
+   * A forma do raio tambem e deterministica (o gerador abaixo e semeado pelo
+   * tempo da frase): um `Math.random()` por frame faria o mesmo raio tremer
+   * como chuvisco em vez de ficar parado no ar enquanto some.
+   */
+  private drawStarPowerBursts(
+    session: PlayerSession,
+    geo: Geometry,
+    options: RenderOptions,
+    songTime: number,
+  ): void {
+    const ctx = this.ctx
+    const duracao = GAME_CONFIG.starPower.phraseBurstSeconds
+    const alive = session.starPowerBursts.filter((burst) => {
+      const age = songTime - burst.time
+      return age >= 0 && age <= duracao
+    })
+
+    for (const burst of alive) {
+      const progress = (songTime - burst.time) / duracao
+      const y = geo.yAt(0)
+
+      // Clarao que lava a pista inteira. Abre rapido e some devagar.
+      const flash = Math.max(0, 1 - progress * 3)
+      if (flash > 0) {
+        this.alpha(flash * 0.5)
+        const lavagem = ctx.createLinearGradient(0, y, 0, geo.yAt(1))
+        lavagem.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+        lavagem.addColorStop(0.5, 'rgba(170, 230, 255, 0.45)')
+        lavagem.addColorStop(1, 'rgba(120, 200, 255, 0)')
+        ctx.fillStyle = lavagem
+        ctx.beginPath()
+        ctx.moveTo(geo.xAt(-0.5, 0), y)
+        ctx.lineTo(geo.xAt(LANE_COUNT - 0.5, 0), y)
+        ctx.lineTo(geo.xAt(LANE_COUNT - 0.5, 1), geo.yAt(1))
+        ctx.lineTo(geo.xAt(-0.5, 1), geo.yAt(1))
+        ctx.closePath()
+        ctx.fill()
+      }
+
+      // Um raio por lane da frase, subindo da hit line para o fundo.
+      const lanes = burst.lanes.length > 0 ? burst.lanes : [2]
+      lanes.forEach((laneOriginal, indice) => {
+        const lane = options.leftyFlip ? LANE_COUNT - 1 - laneOriginal : laneOriginal
+        // Cada raio comeca um pouco depois do anterior: o efeito percorre a
+        // frase em vez de piscar tudo de uma vez.
+        const atraso = indice * 0.06
+        const local = (progress - atraso) / (1 - atraso)
+        if (local <= 0 || local >= 1) return
+
+        const alcance = Math.min(1, local * 2.2)
+        const random = seeded(burst.time * 1000 + laneOriginal)
+        this.boltPath(geo, lane, alcance, random)
+
+        const brilho = 1 - local
+        // Traco grosso e translucido por baixo: e ele que da o "plasma".
+        this.alpha(brilho * 0.55)
+        ctx.strokeStyle = 'rgba(150, 220, 255, 0.9)'
+        ctx.lineWidth = Math.max(3, geo.laneWidth * 0.2)
+        if (options.effects !== 'low') {
+          ctx.shadowBlur = 26
+          ctx.shadowColor = 'rgba(180, 240, 255, 0.95)'
+        }
+        ctx.stroke()
+
+        // Nucleo branco fino por cima.
+        this.alpha(brilho)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.98)'
+        ctx.lineWidth = Math.max(1.4, geo.laneWidth * 0.06)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+
+        // Estrela estourando no traste, na base do raio.
+        this.alpha(brilho)
+        const tamanho = geo.laneWidth * (0.3 + local * 0.5)
+        starPath(ctx, geo.xAt(lane, 0), y, tamanho, tamanho)
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.85 * brilho).toFixed(3)})`
+        ctx.fill()
+      })
+    }
+
+    session.starPowerBursts.length = 0
+    session.starPowerBursts.push(...alive)
+  }
+
+  /**
+   * Monta o caminho de UM raio na lane, sem pintar.
+   *
+   * Quem chama pinta duas vezes (halo grosso e nucleo fino) sobre o mesmo
+   * caminho: e o que da a leitura de descarga eletrica em vez de risco.
+   */
+  private boltPath(
+    geo: Geometry,
+    lane: number,
+    alcance: number,
+    random: () => number,
+  ): void {
+    const ctx = this.ctx
+    const passos = 9
+
+    ctx.beginPath()
+    ctx.moveTo(geo.xAt(lane, 0), geo.yAt(0))
+    for (let i = 1; i <= passos; i++) {
+      const t = (i / passos) * alcance
+      // O desvio encolhe com a perspectiva, senao o raio abriria em leque ao
+      // se afastar, justamente onde a pista e mais estreita.
+      const desvio = (random() - 0.5) * 0.9 * geo.scaleAt(t)
+      ctx.lineTo(geo.xAt(lane + desvio, t), geo.yAt(t))
+    }
+  }
+
   /** Brilho pulsante que toma a pista durante o star power. */
   private drawStarPowerGlow(geo: Geometry, songTime: number): void {
     const ctx = this.ctx
@@ -818,6 +995,51 @@ export class HighwayRenderer {
 }
 
 // ------------------------------------------------------------------ helpers
+
+/**
+ * Caminho de uma estrela de cinco pontas centrada em (x, y).
+ *
+ * Nao pinta: quem chama decide preenchimento e contorno.
+ */
+function starPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  raioX: number,
+  raioY: number,
+): void {
+  const pontas = 5
+  const interno = 0.42
+  ctx.beginPath()
+  for (let i = 0; i < pontas * 2; i++) {
+    // -PI/2 poe a ponta para cima; sem isso a estrela nasce deitada.
+    const angulo = -Math.PI / 2 + (i * Math.PI) / pontas
+    const escala = i % 2 === 0 ? 1 : interno
+    const px = x + Math.cos(angulo) * raioX * escala
+    const py = y + Math.sin(angulo) * raioY * escala
+    if (i === 0) ctx.moveTo(px, py)
+    else ctx.lineTo(px, py)
+  }
+  ctx.closePath()
+}
+
+/**
+ * Gerador pseudoaleatorio semeado (mulberry32).
+ *
+ * O raio precisa ser IRREGULAR mas ESTAVEL: semeado pelo tempo da frase, o
+ * mesmo raio sai igual em todo frame em que aparece. Com `Math.random()` a
+ * forma mudaria 60 vezes por segundo e viraria chuvisco.
+ */
+function seeded(seed: number): () => number {
+  let estado = Math.floor(seed) >>> 0
+  return () => {
+    estado = (estado + 0x6d2b79f5) >>> 0
+    let t = estado
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 function roundedRect(
   ctx: CanvasRenderingContext2D,

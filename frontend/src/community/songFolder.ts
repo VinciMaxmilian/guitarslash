@@ -12,7 +12,16 @@ const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.webp']
 const VIDEO_EXT = ['.mp4', '.webm']
 
 /** Teto por envio. Acima disto o upload no navegador fica sofrivel. */
-export const MAX_UPLOAD_BYTES = 80 * 1024 * 1024
+export const MAX_UPLOAD_BYTES = 140 * 1024 * 1024
+
+/**
+ * Teto do video de fundo.
+ *
+ * Bate com o `file_size_limit` do bucket (migration 0005). Barrar aqui da uma
+ * mensagem util; barrar so no Storage daria um 413 no meio do envio, depois do
+ * chart e do audio ja terem subido.
+ */
+export const MAX_VIDEO_BYTES = 64 * 1024 * 1024
 
 export interface FolderFile {
   name: string
@@ -89,9 +98,16 @@ export function inspectFolder(files: readonly File[]): InspectedFolder {
   }
 
   if (!resultado.cover) resultado.warnings.push('Sem capa: a lista mostra um espaço vazio.')
-  if (resultado.video) {
-    // O video e de longe o arquivo mais pesado, e o jogo roda sem ele.
-    resultado.warnings.push('O vídeo de fundo não é enviado, para poupar espaço.')
+  if (resultado.video && resultado.video.size > MAX_VIDEO_BYTES) {
+    // O video e de longe o arquivo mais pesado. Acima do teto do bucket ele
+    // seria recusado no meio do envio, entao fica de fora e a musica sobe.
+    const mb = Math.round(resultado.video.size / 1048576)
+    const teto = Math.round(MAX_VIDEO_BYTES / 1048576)
+    resultado.warnings.push(
+      `O vídeo tem ${mb} MB e o limite é ${teto} MB: a música sobe sem ele.`,
+    )
+    resultado.totalBytes -= resultado.video.size
+    resultado.video = null
   }
 
   resultado.ok = resultado.errors.length === 0

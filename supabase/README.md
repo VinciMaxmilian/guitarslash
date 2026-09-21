@@ -13,8 +13,16 @@ No dashboard: **SQL Editor** → cole e execute, nesta ordem:
 
 1. `migrations/0001_auth_and_scores.sql` — perfis, configurações, placares
 2. `migrations/0002_community_songs.sql` — músicas da comunidade + bucket
+3. `migrations/0003_community_library_view.sql` — view com o nome de quem enviou
+4. `migrations/0004_community_hardening.sql` — prefixo preso ao dono, cota real
+5. `migrations/0005_community_background_video.sql` — libera o `background.mp4`
 
-As duas são idempotentes: pode rodar de novo sem estragar nada.
+Todas são idempotentes: pode rodar de novo sem estragar nada.
+
+A **0005 é obrigatória para o vídeo de fundo**. Sem ela o bucket recusa o
+arquivo (o mime de vídeo não está na lista e o teto por arquivo é menor que um
+vídeo de música inteira), e a música sobe sem fundo — que era o comportamento
+antigo.
 
 ## 2. Variáveis
 

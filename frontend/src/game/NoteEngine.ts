@@ -17,6 +17,22 @@ export interface GateState {
   notes: NoteState[]
   status: 'pending' | 'hit' | 'missed'
   judgement: Judgement | null
+  /**
+   * Faz parte de uma frase de star power.
+   *
+   * O renderer usa isto para desenhar a nota como ESTRELA. Sem a marca, a
+   * frase seria invisivel: o jogador ganharia energia sem nunca ter visto o
+   * que precisava acertar, que e justamente o contrario do jogo de referencia.
+   */
+  starPower: boolean
+  /**
+   * A frase desta nota ja foi perdida (alguem errou uma nota dela).
+   *
+   * As estrelas restantes continuam valendo pontos normais, mas voltam a ser
+   * desenhadas como nota comum: manter o brilho prometeria energia que nao vem
+   * mais.
+   */
+  starPowerLost: boolean
 }
 
 interface StarPowerPhrase {
@@ -26,12 +42,20 @@ interface StarPowerPhrase {
   awarded: boolean
 }
 
+/** Frase de star power completa: o que o renderer transforma em raio. */
+export interface StarPowerPhraseEvent {
+  /** Tempo de musica da ULTIMA nota da frase. */
+  time: number
+  /** Lanes das notas da frase, para os raios sairem de onde ela passou. */
+  lanes: number[]
+}
+
 export interface NoteEngineCallbacks {
   onHit(gate: GateState, judgement: Judgement): void
   onMiss(gate: GateState): void
   onOverstrum(): void
   onSustain(seconds: number): void
-  onStarPowerPhrase(): void
+  onStarPowerPhrase(event: StarPowerPhraseEvent): void
 }
 
 /**
@@ -79,6 +103,8 @@ export class NoteEngine {
         })),
         status: 'pending',
         judgement: null,
+        starPower: false,
+        starPowerLost: false,
       })
     })
 
@@ -96,6 +122,12 @@ export class NoteEngine {
         return { gates, resolved: 0, hits: 0, awarded: false }
       })
       .filter((phrase) => phrase.gates.length > 0)
+
+    // Marca as notas da frase. A marca e por GATE, e nao por nota solta: num
+    // acorde dentro da frase as cinco notas sao estrela juntas.
+    for (const phrase of this.phrases) {
+      for (const index of phrase.gates) this.gates[index].starPower = true
+    }
   }
 
   /** Indice do primeiro gate que pode estar visivel. Usado pelo renderer. */
@@ -137,6 +169,7 @@ export class NoteEngine {
       phrase.resolved = 0
       phrase.hits = 0
       phrase.awarded = false
+      for (const index of phrase.gates) this.gates[index].starPowerLost = false
     }
 
     // O ponteiro vai para o primeiro gate que ainda nao passou.
@@ -276,10 +309,21 @@ export class NoteEngine {
       if (phrase.awarded || !phrase.gates.includes(gateIndex)) continue
       phrase.resolved++
       if (hit) phrase.hits++
+
+      // Errar UMA nota ja derruba a frase inteira: as estrelas que sobram
+      // apagam na hora, em vez de continuar prometendo energia.
+      if (!hit) {
+        for (const index of phrase.gates) this.gates[index].starPowerLost = true
+      }
+
       if (phrase.resolved >= phrase.gates.length) {
         phrase.awarded = true
         if (phrase.hits >= phrase.gates.length) {
-          this.callbacks.onStarPowerPhrase()
+          const gate = this.gates[gateIndex]
+          this.callbacks.onStarPowerPhrase({
+            time: gate.time,
+            lanes: [...new Set(phrase.gates.flatMap((i) => this.gates[i].lanes))],
+          })
         }
       }
     }

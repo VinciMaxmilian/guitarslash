@@ -93,6 +93,13 @@ export function App() {
 
   // Voltou para o lobby (host clicou em NOVA PARTIDA ou trocou a musica):
   // libera a trava para a proxima partida.
+  //
+  // Este e o UNICO lugar que libera a trava dentro de uma sessao multiplayer.
+  // Liberar ao sair da partida (que era o que `backFromGame` e a tela de
+  // resultado faziam) reabria a entrada automatica enquanto a sala ainda
+  // estava em `loading`/`playing` com o `beginLoad` de pe: o proximo
+  // ROOM_STATE - e eles chegam a todo momento - jogava o jogador de volta
+  // para dentro da musica que ele acabara de sair.
   useEffect(() => {
     if (mp.room?.phase === 'lobby') loadedFor.current = null
   }, [mp.room?.phase])
@@ -119,7 +126,8 @@ export function App() {
   }, [])
 
   const backFromGame = useCallback(() => {
-    loadedFor.current = null
+    // Solo pode liberar a trava: ela so existe para o multiplayer.
+    if (!multiplayer) loadedFor.current = null
     setScreen(multiplayer ? 'lobby' : 'songs')
   }, [multiplayer])
 
@@ -278,7 +286,7 @@ export function App() {
           }
           onSongSelect={() => {
             setResults(null)
-            loadedFor.current = null
+            if (!multiplayer) loadedFor.current = null
             setScreen(multiplayer ? 'lobby' : 'songs')
           }}
         />

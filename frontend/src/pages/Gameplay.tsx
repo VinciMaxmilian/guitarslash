@@ -96,6 +96,9 @@ export function Gameplay({
           training,
           onSnapshot: setSnapshot,
           onFinish: (players) => onFinish(players, chart),
+          // Frase de star power fechada: o raio e desenhado pela engine, o som
+          // sai daqui porque e o mesmo banco de sons da interface.
+          onStarPowerPhrase: () => uiSounds.play('start2'),
           // Cada nota resolvida entra na fila; sai junto do placar a 10 Hz.
           onHit: (event) =>
             reporter.current?.queueHit([
@@ -264,6 +267,23 @@ export function Gameplay({
   const intro = snapshot?.intro
   const videoUrl = resolveAssetUrl(song.assets.backgroundVideo)
 
+  /**
+   * Sair da partida.
+   *
+   * Em LAN, sair no meio sem avisar deixava a sala TRAVADA: o host so fecha a
+   * partida quando todos os jogadores mandaram FINISHED, e quem foi embora
+   * nunca manda. Os outros ficavam na musica ate o timeout, e o lobby nunca
+   * voltava. Mandar o estado final na saida encerra a participacao com o
+   * placar que existia, que e o que o resultado deve mostrar.
+   */
+  const sair = () => {
+    if (reportFinished && !finishedRef.current) {
+      finishedRef.current = true
+      reportFinished(me ? (reporter.current?.final(me) ?? {}) : {})
+    }
+    onExit()
+  }
+
   return (
     <div className="gameplay">
       {videoUrl ? (
@@ -364,7 +384,7 @@ export function Gameplay({
             <button className="btn" onClick={() => engineRef.current?.restart()}>
               <span>Reiniciar</span>
             </button>
-            <button className="btn ghost" onClick={onExit}>
+            <button className="btn ghost" onClick={sair}>
               <span>Sair</span>
             </button>
           </div>
@@ -376,7 +396,7 @@ export function Gameplay({
           <div className="panel overlay-box">
             <h2>Erro</h2>
             <div className="error-box">{error}</div>
-            <button className="btn" onClick={onExit}>
+            <button className="btn" onClick={sair}>
               <span>Voltar</span>
             </button>
           </div>

@@ -212,6 +212,10 @@ export function UploadSong({ userId, onBack, onDone }: Props) {
                   <strong>{pasta.cover?.name ?? 'sem capa'}</strong>
                 </div>
                 <div className="up-linha">
+                  <span>vídeo de fundo</span>
+                  <strong>{pasta.video?.name ?? 'sem vídeo'}</strong>
+                </div>
+                <div className="up-linha">
                   <span>tamanho</span>
                   <strong>
                     {mb(pasta.totalBytes)} de {mb(MAX_UPLOAD_BYTES)}

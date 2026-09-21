@@ -39,6 +39,13 @@ export interface GameEngineOptions {
    * agregado e vem a ~15 Hz - nota individual se perderia.
    */
   onHit?: (event: HitEvent) => void
+  /**
+   * Frase de star power fechada.
+   *
+   * O raio na highway e desenho; o som e da interface, e por isso sobe ate a
+   * tela em vez de sair daqui.
+   */
+  onStarPowerPhrase?: () => void
   /** Treino: trecho a repetir e velocidade. Ausente = partida normal. */
   training?: TrainingOptions
 }
@@ -345,6 +352,12 @@ export class GameEngine {
         onOverstrum: () => {
           this.setInstrumentMuted(true)
           this.rumble()
+        },
+        onStarPowerPhrase: () => {
+          // Vibracao curta e dupla: a mao sente a frase fechar sem tirar os
+          // olhos da pista.
+          this.rumble()
+          this.options.onStarPowerPhrase?.()
         },
       }),
     ]

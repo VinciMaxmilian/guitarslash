@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { MAX_UPLOAD_BYTES, inspectFolder, parseIni, slugify } from './songFolder'
+import { MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES, inspectFolder, parseIni, slugify } from './songFolder'
 
 function arquivo(nome: string, bytes = 1024): File {
   return new File([new Uint8Array(bytes)], nome)
@@ -74,10 +74,20 @@ describe('inspectFolder', () => {
     expect(r.warnings.join(' ')).toContain('capa')
   })
 
-  it('avisa que o video nao sobe', () => {
+  it('aceita o video de fundo dentro do teto', () => {
     const r = inspectFolder([...COMPLETA, arquivo('background.mp4', 30_000_000)])
     expect(r.ok).toBe(true)
+    expect(r.video?.name).toBe('background.mp4')
+    expect(r.warnings.join(' ')).not.toContain('vídeo')
+  })
+
+  it('descarta video acima do teto sem barrar a musica', () => {
+    const r = inspectFolder([...COMPLETA, arquivo('background.mp4', MAX_VIDEO_BYTES + 1)])
+    expect(r.ok).toBe(true)
+    expect(r.video).toBeNull()
     expect(r.warnings.join(' ')).toContain('vídeo')
+    // O video descartado nao pode continuar contando no tamanho do envio.
+    expect(r.totalBytes).toBeLessThan(MAX_VIDEO_BYTES)
   })
 
   it('pasta vazia lista tudo que falta', () => {

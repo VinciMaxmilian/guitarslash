@@ -81,6 +81,8 @@ export const GAME_CONFIG = {
   starPower: {
     /** Energia ganha por frase de star power completa. */
     energyPerPhrase: 0.25,
+    /** Duracao do raio que anuncia a frase fechada. */
+    phraseBurstSeconds: 0.85,
     /** Energia minima para ativar. */
     activationThreshold: 0.5,
     /** Segundos para consumir a barra cheia. */

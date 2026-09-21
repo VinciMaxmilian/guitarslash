@@ -1,5 +1,5 @@
 import { laneForAction } from './config'
-import { NoteEngine } from './NoteEngine'
+import { NoteEngine, type StarPowerPhraseEvent } from './NoteEngine'
 import { ScoreEngine } from './ScoreEngine'
 import type { Chart, GameAction, HitEvent, Judgement, PlayerSnapshot } from './types'
 
@@ -14,6 +14,8 @@ export interface PlayerSessionOptions {
   onHit?: (event: HitEvent) => void
   onMiss?: () => void
   onOverstrum?: () => void
+  /** Frase de star power fechada: serve para o som de recompensa. */
+  onStarPowerPhrase?: (event: StarPowerPhraseEvent) => void
 }
 
 /**
@@ -35,6 +37,14 @@ export class PlayerSession {
   /** Efeitos visuais recentes, consumidos pelo renderer. */
   readonly effects: HitEvent[] = []
   readonly misses: { lane: number; time: number }[] = []
+  /**
+   * Frases de star power fechadas e ainda nao desenhadas.
+   *
+   * Mesma ideia de `effects`: a sessao so anota o QUE aconteceu e QUANDO; o
+   * renderer decide como isso vira raio. Assim o efeito nao depende de frame e
+   * nao existe timer fora do relogio da musica.
+   */
+  readonly starPowerBursts: StarPowerPhraseEvent[] = []
 
   /** Alteravel em tempo real pelas configuracoes, sem recriar a sessao. */
   requireStrum: boolean
@@ -77,8 +87,10 @@ export class PlayerSession {
       onSustain: (seconds) => {
         this.score.addSustain(seconds)
       },
-      onStarPowerPhrase: () => {
+      onStarPowerPhrase: (event) => {
         this.score.addStarPowerPhrase()
+        this.starPowerBursts.push(event)
+        this.options.onStarPowerPhrase?.(event)
       },
     })
   }
@@ -99,6 +111,7 @@ export class PlayerSession {
     this.heldLanes.clear()
     this.effects.length = 0
     this.misses.length = 0
+    this.starPowerBursts.length = 0
     this.lastJudgement = null
     this.lastJudgementAt = -10
   }
@@ -142,6 +155,9 @@ export class PlayerSession {
     }
     if (this.misses.length > 32) {
       this.misses.splice(0, this.misses.length - 32)
+    }
+    if (this.starPowerBursts.length > 4) {
+      this.starPowerBursts.splice(0, this.starPowerBursts.length - 4)
     }
   }
 

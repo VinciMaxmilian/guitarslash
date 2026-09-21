@@ -169,6 +169,50 @@ describe('NoteEngine', () => {
     expect(cb.calls.phrase).toBe(0)
   })
 
+  it('marca como estrela so as notas dentro da frase', () => {
+    const engine = new NoteEngine(
+      chartWith(
+        [note(1, 0, 0), note(2, 1, 1), note(5, 2, 2)],
+        [{ time: 0.5, duration: 2 }],
+      ),
+      callbacks(),
+    )
+    expect(engine.gates.map((g) => g.starPower)).toEqual([true, true, false])
+  })
+
+  it('apaga as estrelas que sobram quando a frase e perdida', () => {
+    const engine = new NoteEngine(
+      chartWith([note(1, 0, 0), note(2, 1, 1)], [{ time: 0.5, duration: 2 }]),
+      callbacks(),
+    )
+    expect(engine.gates.every((g) => !g.starPowerLost)).toBe(true)
+
+    engine.update(1.5, new Set()) // perde a primeira nota da frase
+    // A nota que ainda vai chegar tambem apaga: a frase ja nao paga energia.
+    expect(engine.gates.map((g) => g.starPowerLost)).toEqual([true, true])
+  })
+
+  it('o evento da frase traz o tempo e as lanes, para o raio', () => {
+    const cb = callbacks()
+    const engine = new NoteEngine(
+      chartWith([note(1, 0, 0), note(2, 3, 1)], [{ time: 0.5, duration: 2 }]),
+      cb,
+    )
+    engine.strum(1, new Set([0]))
+    engine.strum(2, new Set([0, 1, 2, 3]))
+    expect(cb.onStarPowerPhrase).toHaveBeenCalledWith({ time: 2, lanes: [0, 3] })
+  })
+
+  it('seek limpa a marca de frase perdida', () => {
+    const engine = new NoteEngine(
+      chartWith([note(1, 0, 0), note(2, 1, 1)], [{ time: 0.5, duration: 2 }]),
+      callbacks(),
+    )
+    engine.update(1.5, new Set())
+    engine.seek(0)
+    expect(engine.gates.every((g) => !g.starPowerLost)).toBe(true)
+  })
+
   it('escolhe a nota mais proxima quando ha duas na janela', () => {
     const cb = callbacks()
     const engine = new NoteEngine(chartWith([note(1.0, 0, 0), note(1.08, 1, 1)]), cb)
