@@ -203,6 +203,37 @@ describe('NoteEngine', () => {
     expect(cb.onStarPowerPhrase).toHaveBeenCalledWith({ time: 2, lanes: [0, 3] })
   })
 
+  it('marca a frase com os tempos reais de um chart, e nao so os redondos', () => {
+    // Recorte literal de `Metallica - Enter Sandman`, expert, guitarra: a
+    // primeira frase de star power e as seis notas dentro dela.
+    //
+    // Os tempos de um chart de verdade sao floats sujos vindos do mapa de
+    // tempo do MIDI, e a primeira nota da frase cai EXATAMENTE no inicio do
+    // span. Um `>` no lugar do `>=`, ou um epsilon pequeno demais, deixaria
+    // essa nota de fora e a frase nunca fecharia - com dado redondo
+    // (time: 1, span: 0..3) o teste passaria e ninguem veria o furo.
+    const engine = new NoteEngine(
+      chartWith(
+        [
+          note(13.431165499999999, 3, 29),
+          note(13.682211499999998, 0, 30),
+          note(14.179158499999998, 3, 31),
+          note(14.425059499999998, 4, 32),
+          note(14.670960499999998, 2, 33),
+          note(14.916861499999998, 1, 34),
+          // Primeira nota DEPOIS da frase: nao pode virar estrela.
+          note(15.671097499999998, 0, 36),
+        ],
+        [{ time: 13.431165499999999, duration: 1.985695999999999 }],
+      ),
+      callbacks(),
+    )
+
+    expect(engine.gates.map((g) => g.starPower)).toEqual([
+      true, true, true, true, true, true, false,
+    ])
+  })
+
   it('seek limpa a marca de frase perdida', () => {
     const engine = new NoteEngine(
       chartWith([note(1, 0, 0), note(2, 1, 1)], [{ time: 0.5, duration: 2 }]),

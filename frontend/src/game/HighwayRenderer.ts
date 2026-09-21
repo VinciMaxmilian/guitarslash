@@ -623,9 +623,15 @@ export class HighwayRenderer {
       body.addColorStop(0, 'rgba(58, 48, 36, 0.98)')
       body.addColorStop(1, 'rgba(14, 10, 7, 0.98)')
     } else if (prateada) {
-      body.addColorStop(0, '#ffffff')
-      body.addColorStop(0.45, '#cfe9f2')
-      body.addColorStop(1, '#5d93ad')
+      // Gelo com FUNDO: o meio-tom desce ate um azul-aco escuro.
+      //
+      // Era aqui que a estrela sumia. O corpo ia de #ffffff a #cfe9f2 e a
+      // estrela por cima e branca: branco sobre branco. A nota de frase
+      // aparecia como uma gema prateada lisa, sem estrela nenhuma - que e
+      // exatamente o "ainda nao apareceram".
+      body.addColorStop(0, '#eaf8ff')
+      body.addColorStop(0.42, '#6fb4d2')
+      body.addColorStop(1, '#16394d')
     } else {
       body.addColorStop(0, lighten(color, 0.7))
       body.addColorStop(0.42, color)
@@ -686,17 +692,24 @@ export class HighwayRenderer {
     // que importa e "isto vale energia".
     if (star) {
       this.alpha(fade)
+      starPath(ctx, x, y, width * 0.34, height * 0.46)
+
+      // Contorno escuro ANTES do preenchimento, e grosso. E ele que garante
+      // a estrela legivel sobre qualquer corpo - inclusive durante o star
+      // power ativo, quando a nota inteira ja e clara.
+      ctx.lineJoin = 'round'
+      ctx.lineWidth = Math.max(1.6, width * 0.07)
+      ctx.strokeStyle = 'rgba(4, 16, 24, 0.95)'
+      ctx.stroke()
+
       if (options.effects !== 'low') {
-        ctx.shadowBlur = 12 * scale
+        ctx.shadowBlur = 14 * scale
         ctx.shadowColor = 'rgba(210, 245, 255, 0.95)'
       }
-      starPath(ctx, x, y, width * 0.26, height * 0.4)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.96)'
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.98)'
       ctx.fill()
       ctx.shadowBlur = 0
-      ctx.lineWidth = Math.max(1, width * 0.035)
-      ctx.strokeStyle = 'rgba(120, 190, 220, 0.9)'
-      ctx.stroke()
+      ctx.lineJoin = 'miter'
       return
     }
 
