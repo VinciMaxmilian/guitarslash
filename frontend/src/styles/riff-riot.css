@@ -179,6 +179,52 @@ button {
 .menu-item-6 { font-size: 40px; line-height: 1.1; color: #cfc2a6; text-shadow: 3px 3px 0 #17110e; }
 .menu-item-6.active, .menu-item-6:hover:not(:disabled) { color: #fff; }
 
+/* ---------------------------------------------- apoio ao projeto (PIX)
+   Canto inferior esquerdo: a coluna do menu fica a direita e a barra de
+   controles ocupa os 74px de baixo, entao esse canto estava vazio.
+   O QR e SVG (nitido em qualquer escala) com os tons do papel da tela;
+   120px mantem os 45 modulos grandes o bastante para a camera pegar. */
+.menu-support {
+  position: absolute;
+  left: 44px;
+  bottom: 96px;
+  width: 384px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  background: #efe2c6;
+  border: 5px solid #17110e;
+  box-shadow: 8px 10px 0 rgba(0,0,0,.5);
+  transform: rotate(-1.6deg);
+  z-index: 6;
+}
+.menu-support-tape {
+  position: absolute; left: -26px; top: -14px; width: 86px; height: 26px;
+  transform: rotate(-21deg); background: #b9b2a4; opacity: .75;
+  box-shadow: 0 2px 0 rgba(0,0,0,.3);
+}
+.menu-support-qr {
+  width: 120px; height: 120px; flex: none; display: block;
+  border: 3px solid #17110e; background: #efe2c6;
+}
+.menu-support-text { min-width: 0; }
+.menu-support-kicker {
+  font-family: 'Archivo Black', sans-serif; font-size: 15px;
+  letter-spacing: .2em; color: #c2481c; margin-bottom: 5px;
+}
+.menu-support-line {
+  margin: 0;
+  font-family: 'Barlow Semi Condensed', 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 17px; line-height: 1.12; color: #241a15;
+}
+.menu-support-soon {
+  margin: 7px 0 0; padding-top: 6px; border-top: 2px dashed #a8987b;
+  font-family: 'Barlow Semi Condensed', 'Barlow Condensed', sans-serif;
+  font-size: 14px; line-height: 1.12; color: #6b5a46;
+}
+
 /* ==================================================
    SONG LIST
    ================================================== */
@@ -970,6 +1016,19 @@ button {
     display: flex;
     flex-direction: column;
   }
+  /* No celular o painel de apoio entra no fluxo, depois da lista. */
+  .menu-list-container { padding-bottom: 14px; }
+  .menu-support {
+    position: static;
+    width: auto;
+    margin: 0 18px 84px;
+    transform: none;
+    gap: 12px;
+  }
+  .menu-support-qr { width: 104px; height: 104px; }
+  .menu-support-kicker { font-size: 13px; }
+  .menu-support-line { font-size: 15px; }
+  .menu-support-soon { font-size: 13px; }
 
   /* ------------------------------------------------------- lista de musicas */
   .song-list-scroll {
@@ -1062,6 +1121,10 @@ button {
   .rr-control-hint { min-height: 38px; padding: 5px 12px; }
   .menu-title-container { padding: 8px 18px 0; }
   .menu-list-container { padding: 6px 18px 54px; }
+  .menu-support { padding: 8px 10px; gap: 10px; }
+  .menu-support-qr { width: 86px; height: 86px; }
+  .menu-support-line { font-size: 14px; }
+  .menu-support-soon { font-size: 12px; }
   .menu-item-btn { font-size: clamp(20px, 5.4vh, 34px) !important; min-height: 34px; }
   .mini-canvas { height: 48px; }
   .ld-angels { margin-bottom: 4px; }

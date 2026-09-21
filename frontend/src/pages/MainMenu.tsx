@@ -142,6 +142,26 @@ export function MainMenu({
         ))}
       </div>
 
+      {/* Apoio ao projeto: canto inferior esquerdo, fora da coluna do menu
+          (que fica a direita) e acima da barra de controles. */}
+      <aside className="menu-support">
+        <div className="menu-support-tape" />
+        <img
+          className="menu-support-qr"
+          src="/ui/pix-qr.svg"
+          alt="QR Code Pix para apoiar o projeto"
+        />
+        <div className="menu-support-text">
+          <div className="menu-support-kicker">PIX · APOIE</div>
+          <p className="menu-support-line">
+            Dê suporte ao projeto aberto, para melhores servidores e tecnologias
+          </p>
+          <p className="menu-support-soon">
+            Em breve, novos controles de imersão (guitarras, baixos, etc)
+          </p>
+        </div>
+      </aside>
+
       <div className="rr-control-bar">
         <div className="rr-control-hint no-border">
           <div className="rr-key green" />
