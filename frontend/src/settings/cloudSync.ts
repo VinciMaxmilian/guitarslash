@@ -41,10 +41,12 @@ export function decideSync(
  *
  * `keyBindings` e por aparelho: o mapeamento do teclado do desktop nao faz
  * sentido no celular, e sobrescrever um com o outro deixaria o jogador sem
- * controle. `version` a nuvem tambem nao precisa ditar - a migracao local
- * cuida disso.
+ * controle. `gamepad` e ainda mais preso ao aparelho - a calibracao dos eixos
+ * vale para AQUELE controle, e mandar a de um DualShock gasto para outra
+ * maquina estragaria o controle de la. `version` a nuvem tambem nao precisa
+ * ditar - a migracao local cuida disso.
  */
-const LOCAL_ONLY = ['keyBindings'] as const
+const LOCAL_ONLY = ['keyBindings', 'gamepad'] as const
 
 /** Recorta o que vai ser gravado na nuvem. */
 export function toCloudPayload(settings: Settings): Record<string, unknown> {

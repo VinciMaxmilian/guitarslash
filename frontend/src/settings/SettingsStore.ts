@@ -1,16 +1,28 @@
 import { DEFAULT_BINDINGS, DEFAULT_NOTE_COLORS } from '../game/config'
-import type { Settings } from './types'
+import { DEFAULT_GAMEPAD_BINDINGS, parseSignals } from '../game/gamepadProfiles'
+import type { AxisCalibration, GamepadSettings, Settings } from './types'
 
 const STORAGE_KEY = 'guitarslash.settings'
 /** Hora da ultima alteracao local, usada para decidir o sync com a nuvem. */
 const TOUCHED_KEY = 'guitarslash.settings.touchedAt'
-export const SETTINGS_VERSION = 1
+export const SETTINGS_VERSION = 2
 
 export const DEFAULT_SETTINGS: Settings = {
   version: SETTINGS_VERSION,
   profileName: 'Player 1',
   noteColors: [...DEFAULT_NOTE_COLORS],
   keyBindings: { ...DEFAULT_BINDINGS },
+  gamepad: {
+    // Ligado por padrao: plugou o controle, jogou. Quem nao tem controle nao
+    // percebe diferenca, porque sem controle conectado nada e lido.
+    enabled: true,
+    deviceId: null,
+    deadzone: 0.25,
+    axisThreshold: 0.6,
+    vibration: true,
+    bindings: { ...DEFAULT_GAMEPAD_BINDINGS },
+    calibration: {},
+  },
   volumes: {
     master: 0.9,
     music: 1,
@@ -75,6 +87,20 @@ export class SettingsStore {
     return this.update({ keyBindings: { [action]: code } as Partial<Settings['keyBindings']> })
   }
 
+  setGamepadBinding(action: keyof Settings['keyBindings'], signals: string): Settings {
+    // `merge` e raso por secao: mandar so a acao alterada apagaria o resto do
+    // mapeamento. Por isso vai o objeto inteiro.
+    const bindings = { ...this.settings.gamepad.bindings, [action]: signals }
+    return this.update({ gamepad: { bindings } })
+  }
+
+  setGamepadCalibration(deviceId: string, calibration: AxisCalibration | null): Settings {
+    const atual = { ...this.settings.gamepad.calibration }
+    if (calibration) atual[deviceId] = calibration
+    else delete atual[deviceId]
+    return this.update({ gamepad: { calibration: atual } })
+  }
+
   setNoteColor(lane: number, color: string): Settings {
     const noteColors = [...this.settings.noteColors]
     noteColors[lane] = color
@@ -111,6 +137,51 @@ export function markLocalTouched(at: number = Date.now()): void {
 }
 
 // ------------------------------------------------------------------ helpers
+
+/** Quantos controles guardam calibracao, para o localStorage nao crescer sem fim. */
+const MAX_CALIBRATED_DEVICES = 8
+
+function validateGamepad(input: Partial<GamepadSettings> | undefined): GamepadSettings {
+  const padrao = DEFAULT_SETTINGS.gamepad
+
+  const bindings = { ...DEFAULT_GAMEPAD_BINDINGS }
+  for (const action of Object.keys(DEFAULT_GAMEPAD_BINDINGS) as (keyof typeof bindings)[]) {
+    const bruto = input?.bindings?.[action]
+    if (typeof bruto !== 'string') continue
+    // Sinal desconhecido vira "sem vinculo" em vez de derrubar a acao inteira
+    // para o padrao: o jogador que tirou o vinculo de proposito nao o ganha
+    // de volta sozinho a cada carregamento.
+    bindings[action] = parseSignals(bruto).join('|')
+  }
+
+  const calibration: Record<string, AxisCalibration> = {}
+  const bruto = input?.calibration
+  if (bruto && typeof bruto === 'object' && !Array.isArray(bruto)) {
+    for (const [deviceId, valor] of Object.entries(bruto).slice(0, MAX_CALIBRATED_DEVICES)) {
+      const center = numberArray((valor as AxisCalibration)?.center)
+      const range = numberArray((valor as AxisCalibration)?.range)
+      if (center.length === 0 || range.length === 0) continue
+      calibration[deviceId] = { center, range }
+    }
+  }
+
+  return {
+    enabled: input?.enabled ?? padrao.enabled,
+    deviceId: typeof input?.deviceId === 'string' && input.deviceId ? input.deviceId : null,
+    deadzone: clamp(input?.deadzone, 0, 0.9, padrao.deadzone),
+    axisThreshold: clamp(input?.axisThreshold, 0.15, 0.95, padrao.axisThreshold),
+    vibration: input?.vibration ?? padrao.vibration,
+    bindings,
+    calibration,
+  }
+}
+
+function numberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .slice(0, 32)
+    .map((n) => (typeof n === 'number' && Number.isFinite(n) ? Math.max(-2, Math.min(2, n)) : 0))
+}
 
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K]
@@ -163,6 +234,7 @@ export function validate(input: Settings): Settings {
     profileName: (input.profileName || DEFAULT_SETTINGS.profileName).toString().slice(0, 24),
     noteColors,
     keyBindings,
+    gamepad: validateGamepad(input.gamepad),
     volumes: {
       master: clamp(input.volumes?.master, 0, 1, DEFAULT_SETTINGS.volumes.master),
       music: clamp(input.volumes?.music, 0, 1, DEFAULT_SETTINGS.volumes.music),

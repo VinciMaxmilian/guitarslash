@@ -75,7 +75,7 @@ describe('readSupabaseConfig', () => {
 
 describe('isServerKey', () => {
   it('detecta a secret key pelo prefixo', () => {
-    expect(isServerKey('sb_secret_fIDObhHRf6cZP8dLAnOaSA')).toBe(true)
+    expect(isServerKey('sb_secret_ABC123fake')).toBe(true)
   })
 
   it('detecta service_role dentro do JWT', () => {

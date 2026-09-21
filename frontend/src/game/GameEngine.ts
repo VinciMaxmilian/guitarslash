@@ -2,6 +2,7 @@ import { AudioEngine } from './AudioEngine'
 import { lookAheadFor } from './config'
 import { HighwayRenderer } from './HighwayRenderer'
 import { IntroSequence } from './IntroSequence'
+import { gamepadManager } from './GamepadManager'
 import { InputRouter } from './InputRouter'
 import { PlayerSession } from './PlayerSession'
 import { audioStartDelay, chartDuration, chartTime } from './songClock'
@@ -73,6 +74,9 @@ export class GameEngine {
 
   /** True enquanto o instrumento do jogador estiver cortado por erro. */
   private stemMuted = false
+
+  /** Cancela a inscricao no leitor de controles. */
+  private unsubscribeGamepad: (() => void) | null = null
 
   private rafId = 0
   private lastFrameTime = 0
@@ -162,6 +166,7 @@ export class GameEngine {
       this.audio.scheduleStart(audioStartDelay(IntroSequence.leadIn, this.options.songDelay))
     }
     this.input.attach()
+    this.attachGamepad()
     this.lastFrameTime = performance.now() / 1000
     this.rafId = requestAnimationFrame(this.loop)
   }
@@ -201,6 +206,8 @@ export class GameEngine {
 
   destroy(): void {
     cancelAnimationFrame(this.rafId)
+    this.unsubscribeGamepad?.()
+    this.unsubscribeGamepad = null
     this.input.detach()
     this.audio.dispose()
     this.video.dispose()
@@ -250,10 +257,36 @@ export class GameEngine {
     this.video.volume = settings.volumes.master * settings.volumes.video
     this.video.offset = settings.calibration.videoOffsetMs / 1000
     this.input.setBindings(0, invert(settings.keyBindings))
+    this.input.setGamepadBindings(0, settings.gamepad.bindings)
+    gamepadManager.configure(settings.gamepad)
     // Trocar o modo de palhetada vale na hora, sem reiniciar a musica.
     for (const session of this.sessions) {
       session.requireStrum = settings.gameplay.requireStrum
     }
+  }
+
+  /**
+   * Liga o controle na mesma porta de entrada do teclado.
+   *
+   * O filtro por aparelho e aplicado AQUI, e nao no leitor, porque a tela de
+   * configuracoes precisa continuar enxergando todos os controles para o
+   * jogador poder escolher um.
+   */
+  private attachGamepad(): void {
+    if (this.unsubscribeGamepad) return
+    this.unsubscribeGamepad = gamepadManager.onSignal(({ signal, pressed, deviceIndex, deviceId }) => {
+      const config = this.options.settings.gamepad
+      if (!config.enabled) return
+      if (config.deviceId && config.deviceId !== deviceId) return
+      this.input.dispatchSignal(signal, pressed, deviceIndex)
+    })
+  }
+
+  /** Tranco curto no controle quando o jogador erra. */
+  private rumble(): void {
+    if (!this.options.settings.gamepad.enabled) return
+    if (!this.options.settings.gamepad.vibration) return
+    gamepadManager.rumble(0.55, 120)
   }
 
   // ------------------------------------------------------------------ estado
@@ -305,8 +338,14 @@ export class GameEngine {
           this.setInstrumentMuted(false)
           this.options.onHit?.(event)
         },
-        onMiss: () => this.setInstrumentMuted(true),
-        onOverstrum: () => this.setInstrumentMuted(true),
+        onMiss: () => {
+          this.setInstrumentMuted(true)
+          this.rumble()
+        },
+        onOverstrum: () => {
+          this.setInstrumentMuted(true)
+          this.rumble()
+        },
       }),
     ]
     this.stemMuted = false

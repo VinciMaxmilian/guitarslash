@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { DEFAULT_BINDINGS } from '../game/config'
+import { DEFAULT_GAMEPAD_BINDINGS } from '../game/gamepadProfiles'
 import { DEFAULT_SETTINGS, migrate, SettingsStore, validate } from './SettingsStore'
 
 describe('validate', () => {
@@ -59,6 +60,49 @@ describe('validate', () => {
     expect(migrate({ gameplay: { noteSpeed: 6 } }).gameplay.requireStrum).toBe(false)
   })
 
+  it('limpa sinais invalidos do controle sem devolver o padrao', () => {
+    // Quem tirou o vinculo de proposito nao pode ganha-lo de volta sozinho.
+    const settings = validate({
+      ...DEFAULT_SETTINGS,
+      gamepad: {
+        ...DEFAULT_SETTINGS.gamepad,
+        bindings: { ...DEFAULT_GAMEPAD_BINDINGS, fret0: 'KeyA|b7', starPower: '' },
+      },
+    })
+    expect(settings.gamepad.bindings.fret0).toBe('b7')
+    expect(settings.gamepad.bindings.starPower).toBe('')
+  })
+
+  it('limita zona morta e limiar do eixo', () => {
+    const settings = validate({
+      ...DEFAULT_SETTINGS,
+      gamepad: { ...DEFAULT_SETTINGS.gamepad, deadzone: 9, axisThreshold: 0 },
+    })
+    expect(settings.gamepad.deadzone).toBe(0.9)
+    expect(settings.gamepad.axisThreshold).toBe(0.15)
+  })
+
+  it('descarta calibracao sem numeros', () => {
+    const settings = validate({
+      ...DEFAULT_SETTINGS,
+      gamepad: {
+        ...DEFAULT_SETTINGS.gamepad,
+        calibration: {
+          bom: { center: [0, 0.2], range: [1, 0.8] },
+          torto: { center: 'nao-e-lista', range: [1] } as never,
+        },
+      },
+    })
+    expect(settings.gamepad.calibration.bom.center).toEqual([0, 0.2])
+    expect(settings.gamepad.calibration.torto).toBeUndefined()
+  })
+
+  it('config antiga, de antes do controle existir, ganha o padrao', () => {
+    const settings = migrate({ profileName: 'Zeca' })
+    expect(settings.gamepad.bindings).toEqual(DEFAULT_GAMEPAD_BINDINGS)
+    expect(settings.gamepad.enabled).toBe(true)
+  })
+
   it('rejeita nivel de efeitos desconhecido', () => {
     const settings = validate({
       ...DEFAULT_SETTINGS,
@@ -109,6 +153,23 @@ describe('SettingsStore', () => {
     store.setNoteColor(2, '#ff00ff')
     expect(store.get().noteColors[2]).toBe('#ff00ff')
     expect(store.get().noteColors[0]).toBe(DEFAULT_SETTINGS.noteColors[0])
+  })
+
+  it('setGamepadBinding altera apenas a acao pedida', () => {
+    const store = new SettingsStore()
+    store.setGamepadBinding('fret0', 'b7')
+    expect(store.get().gamepad.bindings.fret0).toBe('b7')
+    expect(store.get().gamepad.bindings.strum).toBe(DEFAULT_GAMEPAD_BINDINGS.strum)
+  })
+
+  it('setGamepadCalibration guarda e apaga por controle', () => {
+    const store = new SettingsStore()
+    store.setGamepadCalibration('pad-a', { center: [0.1], range: [0.9] })
+    store.setGamepadCalibration('pad-b', { center: [0], range: [1] })
+    expect(Object.keys(store.get().gamepad.calibration)).toEqual(['pad-a', 'pad-b'])
+    store.setGamepadCalibration('pad-a', null)
+    expect(store.get().gamepad.calibration['pad-a']).toBeUndefined()
+    expect(store.get().gamepad.calibration['pad-b']).toBeDefined()
   })
 
   it('setBinding altera apenas a acao pedida', () => {

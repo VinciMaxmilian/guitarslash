@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { GamepadSettings } from '../components/GamepadSettings'
 import {
   ACTION_LABELS,
   COLORBLIND_NOTE_COLORS,
@@ -127,7 +128,7 @@ export function SettingsScreen({ onBack }: Props) {
         </section>
 
         <section className="panel settings-group">
-          <h3>Controles</h3>
+          <h3>Controles (teclado)</h3>
           {ACTIONS.map((action) => {
             const code = settings.keyBindings[action]
             return (
@@ -155,6 +156,8 @@ export function SettingsScreen({ onBack }: Props) {
             O mapeamento usa a POSIÇÃO física da tecla, então funciona igual em ABNT2 e US.
           </p>
         </section>
+
+        <GamepadSettings settings={settings} />
 
         <section className="panel settings-group">
           <h3>Visual</h3>
