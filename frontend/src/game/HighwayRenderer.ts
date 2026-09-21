@@ -544,13 +544,13 @@ export class HighwayRenderer {
     const y = geo.yAt(t)
     // Gema mais alta que o retangulo achatado anterior: e o que da a leitura
     // de "botao" da referencia, em vez de um tijolo deitado.
-    // Proporcao da referencia: a nota ocupa quase a lane inteira e e BAIXA.
-    // Antes era 0.74 de altura com raio de meia altura, o que a fechava numa
-    // pilula - forma que nao existe no jogo de referencia e que, junto com o
-    // aro grosso, e o que dava o aspecto de balinha.
-    const width = geo.laneWidth * 0.94 * scale
-    const height = width * 0.54
-    const radius = height * 0.3
+    // Gema ARREDONDADA e cheia: ocupa a lane inteira e o raio fecha os lados
+    // por completo. A versao baixa e de canto curto que veio antes lia como
+    // tijolo deitado - a nota precisa ser um botao redondo, que e a forma que
+    // o olho associa a "aperte isto".
+    const width = geo.laneWidth * 1.02 * scale
+    const height = width * 0.72
+    const radius = height * 0.5
 
     // Sombra no piso: e o que "assenta" a nota na pista.
     this.alpha(0.42 * fade)
@@ -778,10 +778,10 @@ export class HighwayRenderer {
       const chegada = fretArrival(options.reveal, lane, LANE_COUNT)
       if (chegada.alpha <= 0) continue
 
-      // Antes era 0.46 da lane: os aneis encostavam um no outro e tapavam a
-      // barra da hit line, que e justamente a referencia visual de QUANDO
-      // tocar. Na referencia o traste e bem menor que a lane.
-      const radiusX = geo.laneWidth * (0.34 + punch * 0.07) * chegada.scale
+      // 0.42 da lane: grande o bastante para ser o alvo obvio de cada lane,
+      // sem os aneis encostarem um no outro e taparem a barra da hit line -
+      // que e a referencia visual de QUANDO tocar, e era o que 0.46 escondia.
+      const radiusX = geo.laneWidth * (0.42 + punch * 0.08) * chegada.scale
       const radiusY = radiusX * 0.5
       const press = held ? radiusY * 0.2 : 0
       const aceso = held || punch > 0
