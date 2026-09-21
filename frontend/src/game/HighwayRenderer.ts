@@ -129,7 +129,7 @@ export class HighwayRenderer {
     this.drawHitLine(geo, session, options)
     this.drawFrets(session, geo, options, songTime)
     this.drawMissEffects(session, geo, songTime)
-    if (starPower) this.drawStarPowerGlow(geo, songTime)
+    if (starPower) this.drawStarPowerGlow(geo, songTime, options)
     // Por ULTIMO: o raio da frase passa por cima de tudo, inclusive dos
     // trastes. E a recompensa, e ela tem de ser impossivel de nao ver.
     this.drawStarPowerBursts(session, geo, options, songTime)
@@ -193,6 +193,45 @@ export class HighwayRenderer {
       ctx.fill()
     }
 
+    // Textura de metal escovado: riscos finos AO LONGO da pista, seguindo a
+    // perspectiva. Sao eles que tiram o aspecto de plastico liso - metal
+    // escovado nunca e uma cor chapada, e a olho nu o que se ve sao os
+    // riscos, nao o tom.
+    if (options.effects !== 'low') {
+      const riscos = options.effects === 'high' ? 84 : 44
+      const random = seeded(1337)
+      ctx.lineWidth = 1
+      for (let i = 0; i < riscos; i++) {
+        // Posicao fixa por sorteio semeado: risco que muda de lugar a cada
+        // frame vira chuvisco em vez de textura.
+        const lane = random() * LANE_COUNT - 0.5
+        const forca = 0.03 + random() * 0.06
+        const inicio = random() * 0.5
+        const fim = inicio + 0.3 + random() * 0.5
+        const claro = random() > 0.5
+        const risco = ctx.createLinearGradient(0, nearY, 0, farY)
+        const tom = claro ? '255, 246, 228' : '0, 0, 0'
+        risco.addColorStop(0, `rgba(${tom}, ${forca})`)
+        risco.addColorStop(0.7, `rgba(${tom}, ${forca * 0.35})`)
+        risco.addColorStop(1, `rgba(${tom}, 0)`)
+        ctx.strokeStyle = risco
+        ctx.beginPath()
+        ctx.moveTo(geo.xAt(lane, inicio), geo.yAt(inicio))
+        ctx.lineTo(geo.xAt(lane, Math.min(1, fim)), geo.yAt(Math.min(1, fim)))
+        ctx.stroke()
+      }
+
+      // Faixa especular atravessada: o reflexo que prova que a superficie e
+      // metalica, e nao pintada.
+      const brilho = ctx.createLinearGradient(nearLeft, nearY, nearRight, geo.yAt(0.55))
+      brilho.addColorStop(0, 'rgba(255, 255, 255, 0)')
+      brilho.addColorStop(0.42, starPower ? 'rgba(200, 240, 255, 0.1)' : 'rgba(255, 238, 208, 0.07)')
+      brilho.addColorStop(0.58, starPower ? 'rgba(200, 240, 255, 0.1)' : 'rgba(255, 238, 208, 0.07)')
+      brilho.addColorStop(1, 'rgba(255, 255, 255, 0)')
+      ctx.fillStyle = brilho
+      ctx.fill(path)
+    }
+
     // Neblina no fundo: esconde o ponto de fuga e da profundidade.
     const fog = ctx.createLinearGradient(0, farY, 0, farY + (nearY - farY) * 0.34)
     fog.addColorStop(0, starPower ? 'rgba(6, 18, 28, 0.95)' : 'rgba(8, 4, 2, 0.95)')
@@ -224,7 +263,22 @@ export class HighwayRenderer {
       ? 'rgba(207, 233, 242, 0.95)'
       : `rgba(${Math.round(217 + heat * 30)}, ${Math.round(154 - heat * 40)}, ${Math.round(43 + heat * 10)}, ${0.7 + heat * 0.3})`
 
-    ctx.lineWidth = Math.max(2.5, geo.viewport.width * 0.0045)
+    const espessura = Math.max(2.5, geo.viewport.width * 0.0045)
+
+    // Sombra do trilho, por baixo e deslocada: e ela que levanta o trilho da
+    // pista em vez de deixa-lo parecendo um risco desenhado nela.
+    this.alpha(0.75)
+    ctx.lineWidth = espessura * 1.9
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)'
+    ctx.beginPath()
+    ctx.moveTo(nearLeft, nearY + espessura)
+    ctx.lineTo(farLeft, farY)
+    ctx.moveTo(nearRight, nearY + espessura)
+    ctx.lineTo(farRight, farY)
+    ctx.stroke()
+
+    this.alpha(1)
+    ctx.lineWidth = espessura
     ctx.strokeStyle = railColor
     if (options.effects !== 'low') {
       ctx.shadowBlur = 16 + heat * 14
@@ -237,6 +291,17 @@ export class HighwayRenderer {
     ctx.lineTo(farRight, farY)
     ctx.stroke()
     ctx.shadowBlur = 0
+
+    // Fio claro no topo do trilho: o bisel do metal.
+    this.alpha(0.55)
+    ctx.lineWidth = Math.max(1, espessura * 0.38)
+    ctx.strokeStyle = 'rgba(255, 250, 235, 0.9)'
+    ctx.beginPath()
+    ctx.moveTo(nearLeft, nearY - espessura * 0.4)
+    ctx.lineTo(farLeft, farY - espessura * 0.1)
+    ctx.moveTo(nearRight, nearY - espessura * 0.4)
+    ctx.lineTo(farRight, farY - espessura * 0.1)
+    ctx.stroke()
   }
 
   private drawBeats(
@@ -504,7 +569,19 @@ export class HighwayRenderer {
       radius,
     )
     ctx.lineWidth = ringWidth
-    ctx.strokeStyle = prateada ? 'rgba(236, 249, 255, 0.98)' : lighten(color, 0.45)
+    // Bisel: o aro nao e de uma cor so. Claro em cima, escuro embaixo - e a
+    // diferenca entre ler como metal cromado e como adesivo colorido.
+    const aro = ctx.createLinearGradient(0, y - height / 2, 0, y + height / 2)
+    if (prateada) {
+      aro.addColorStop(0, 'rgba(255, 255, 255, 1)')
+      aro.addColorStop(0.45, 'rgba(206, 235, 247, 0.98)')
+      aro.addColorStop(1, 'rgba(96, 148, 176, 0.95)')
+    } else {
+      aro.addColorStop(0, lighten(color, 0.8))
+      aro.addColorStop(0.42, lighten(color, 0.35))
+      aro.addColorStop(1, darken(color, 0.5))
+    }
+    ctx.strokeStyle = aro
     ctx.stroke()
 
     // Domo interno.
@@ -539,6 +616,35 @@ export class HighwayRenderer {
       body.addColorStop(1, darken(color, 0.42))
     }
     ctx.fillStyle = body
+    ctx.fill()
+
+    // Riscos horizontais no domo: a mesma textura escovada da pista, em
+    // miniatura. O clip usa o caminho do domo, que ainda e o caminho atual.
+    // Sem eles o domo le como vidro, e nao como metal.
+    if (options.effects === 'high' && height > 10) {
+      ctx.save()
+      ctx.clip()
+      this.alpha(0.16 * fade)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.lineWidth = Math.max(0.5, height * 0.03)
+      ctx.beginPath()
+      for (let linha = -2; linha <= 2; linha++) {
+        const ly = y + linha * height * 0.15
+        ctx.moveTo(x - width * 0.34, ly)
+        ctx.lineTo(x + width * 0.34, ly)
+      }
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // Luz refletida pela pista na barriga da nota: fecha o volume por baixo.
+    this.alpha(0.45 * fade)
+    ctx.beginPath()
+    ctx.ellipse(x, y + height * 0.22, width * 0.26, height * 0.1, 0, 0, Math.PI * 2)
+    const reflexo = ctx.createLinearGradient(0, y + height * 0.1, 0, y + height * 0.34)
+    reflexo.addColorStop(0, 'rgba(255,255,255,0)')
+    reflexo.addColorStop(1, prateada ? 'rgba(220,245,255,0.75)' : hexToRgba(color, 0.85))
+    ctx.fillStyle = reflexo
     ctx.fill()
 
     // Brilho especular no alto: da volume ao domo.
@@ -972,8 +1078,15 @@ export class HighwayRenderer {
     }
   }
 
-  /** Brilho pulsante que toma a pista durante o star power. */
-  private drawStarPowerGlow(geo: Geometry, songTime: number): void {
+  /**
+   * A pista durante o star power: brilho pulsante e eletricidade.
+   *
+   * Os raios sao semeados por uma FATIA de tempo (12 por segundo), e nao pelo
+   * frame: dentro da mesma fatia todo frame desenha o mesmo raio, entao ele
+   * fica parado no ar e depois salta para outro lugar - que e como descarga
+   * eletrica se comporta. Semear por frame daria chuvisco a 60 Hz.
+   */
+  private drawStarPowerGlow(geo: Geometry, songTime: number, options: RenderOptions): void {
     const ctx = this.ctx
     const nearY = geo.yAt(0)
     const farY = geo.yAt(1)
@@ -991,6 +1104,67 @@ export class HighwayRenderer {
     ctx.lineTo(geo.xAt(-0.5, 1), farY)
     ctx.closePath()
     ctx.fill()
+
+    if (options.effects === 'low') return
+
+    const fatia = Math.floor(songTime * 12)
+    const random = seeded(fatia)
+
+    // Eletricidade correndo pelos trilhos: e o que faz a moldura da pista
+    // parecer energizada, e nao so pintada de azul.
+    for (const borda of [-0.5, LANE_COUNT - 0.5]) {
+      const inicio = random() * 0.45
+      const fim = Math.min(1, inicio + 0.35 + random() * 0.45)
+      ctx.beginPath()
+      const passos = 10
+      for (let i = 0; i <= passos; i++) {
+        const t = inicio + ((fim - inicio) * i) / passos
+        const desvio = (random() - 0.5) * 0.28 * geo.scaleAt(t)
+        const px = geo.xAt(borda + desvio, t)
+        const py = geo.yAt(t)
+        if (i === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      }
+      this.alpha(0.5)
+      ctx.strokeStyle = 'rgba(150, 220, 255, 0.9)'
+      ctx.lineWidth = Math.max(2, geo.laneWidth * 0.1)
+      ctx.shadowBlur = 20
+      ctx.shadowColor = 'rgba(180, 240, 255, 0.95)'
+      ctx.stroke()
+      this.alpha(0.95)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'
+      ctx.lineWidth = Math.max(1, geo.laneWidth * 0.035)
+      ctx.stroke()
+      ctx.shadowBlur = 0
+    }
+
+    // De vez em quando um arco atravessa a pista de lado a lado. Aparece em
+    // cerca de um terco das fatias: constante viraria ruido de fundo e o olho
+    // pararia de registrar.
+    if (options.effects === 'high' && random() < 0.34) {
+      const t = 0.1 + random() * 0.65
+      ctx.beginPath()
+      const passos = 9
+      for (let i = 0; i <= passos; i++) {
+        const lane = -0.5 + (LANE_COUNT * i) / passos
+        const desvio = (random() - 0.5) * 0.09
+        const px = geo.xAt(lane, t)
+        const py = geo.yAt(Math.max(0, t + desvio))
+        if (i === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      }
+      this.alpha(0.42)
+      ctx.strokeStyle = 'rgba(160, 225, 255, 0.85)'
+      ctx.lineWidth = Math.max(2, geo.laneWidth * 0.09) * geo.scaleAt(t)
+      ctx.shadowBlur = 18
+      ctx.shadowColor = 'rgba(180, 240, 255, 0.9)'
+      ctx.stroke()
+      this.alpha(0.85)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'
+      ctx.lineWidth = Math.max(1, geo.laneWidth * 0.03) * geo.scaleAt(t)
+      ctx.stroke()
+      ctx.shadowBlur = 0
+    }
   }
 }
 

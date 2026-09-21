@@ -5,7 +5,7 @@ import { DIFFICULTY_LABELS, INSTRUMENT_LABELS, type SongSummary } from '../api/t
 import { GameEngine, type TrainingOptions } from '../game/GameEngine'
 import { ScoreReporter } from '../game/ScoreReporter'
 import { OpponentHighways } from '../components/OpponentHighways'
-import { RockMeter, ScorePanel } from '../components/ScorePanel'
+import { RockMeter, ScorePanel, StarPowerMeter } from '../components/ScorePanel'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { TouchControls } from '../components/TouchControls'
 import { hasTouch } from '../game/touchLanes'
@@ -434,29 +434,11 @@ function Hud({
         />
 
         <div className="hud-right">
-          <div className="hud-label">Star Power</div>
-          <div className="sp-meter">
-            <div
-              className={`sp-fill ${
-                player.starPowerActive
-                  ? 'active'
-                  : player.starPowerEnergy >= 0.5
-                    ? 'ready'
-                    : ''
-              }`}
-              style={{ width: `${Math.round(player.starPowerEnergy * 100)}%` }}
-            />
-          </div>
-          <div className="hud-combo" style={{ marginTop: 4 }}>
-            {player.starPowerActive
-              ? 'ativo'
-              : player.starPowerEnergy >= 0.5
-                ? 'pronto (Enter)'
-                : `${Math.round(player.starPowerEnergy * 100)}%`}
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-            <RockMeter value={player.rockMeter} />
-          </div>
+          <StarPowerMeter
+            energy={player.starPowerEnergy}
+            active={player.starPowerActive}
+          />
+          <RockMeter value={player.rockMeter} />
         </div>
       </div>
 

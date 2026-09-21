@@ -584,7 +584,7 @@ button {
 /* Mostrador circular do multiplicador. */
 .gh-dial {
   position: relative;
-  width: 100%;
+  flex: 1;
   aspect-ratio: 1;
   border-radius: 50%;
   display: grid;
@@ -593,19 +593,57 @@ button {
   box-shadow: inset 0 3px 12px rgba(0, 0, 0, .9), 0 0 0 2px #0c0a08;
 }
 
-/* Anel de progresso do combo ate o proximo degrau. */
-.gh-dial-ring {
+/* Coluna de LEDs + mostrador, lado a lado. */
+.gh-streak-row { display: flex; align-items: center; gap: 8px; }
+
+/*
+ * Medidor de combo: cinco LEDs que acendem por METADE.
+ *
+ * Cada nota acertada acende meia luz (sao 10 notas por degrau), entao o
+ * jogador conta quanto falta para o proximo multiplicador sem tirar os olhos
+ * da pista. Ao completar os cinco, o degrau sobe e eles zeram.
+ */
+.gh-streak {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+  padding: 4px 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(10, 8, 6, .95), rgba(26, 22, 18, .95));
+  box-shadow: inset 0 0 0 1px rgba(122, 112, 96, .4), inset 0 2px 6px rgba(0, 0, 0, .9);
+}
+
+.gh-led {
+  position: relative;
+  width: clamp(11px, 1.1vw, 15px);
+  height: clamp(7px, .7vw, 10px);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .8);
+  overflow: hidden;
+  transition: background .08s linear, box-shadow .08s linear;
+}
+
+/* Meia luz: o preenchimento entra pela ESQUERDA, como uma barra enchendo. */
+.gh-led.half::before {
+  content: '';
   position: absolute;
-  inset: 5%;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--mult-cor) 0 var(--progresso, 0%),
-    rgba(255, 255, 255, .07) var(--progresso, 0%) 100%
-  );
-  /* Vira um anel: o miolo e recortado. */
-  mask: radial-gradient(circle, transparent 0 63%, #000 65% 100%);
-  -webkit-mask: radial-gradient(circle, transparent 0 63%, #000 65% 100%);
-  transition: background .1s linear;
+  inset: 0 50% 0 0;
+  background: var(--mult-cor);
+  box-shadow: 0 0 6px var(--mult-glow);
+}
+
+.gh-led.on {
+  background: var(--mult-cor);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55), 0 0 7px var(--mult-glow);
+}
+
+/* No teto do multiplicador nao ha o que preencher: a coluna fica cheia e
+   pulsa de leve, em vez de fingir um progresso que acabou. */
+.gh-streak.cheio .gh-led.on { animation: gh-led-teto 1.1s ease-in-out infinite alternate; }
+@keyframes gh-led-teto {
+  from { box-shadow: inset 0 0 0 1px rgba(0,0,0,.55), 0 0 6px var(--mult-glow); }
+  to   { box-shadow: inset 0 0 0 1px rgba(0,0,0,.55), 0 0 16px var(--mult-glow); }
 }
 
 .gh-dial-face {
@@ -649,6 +687,91 @@ button {
   text-align: center;
   color: rgba(236, 228, 207, .6);
 }
+
+/* ------------------------------------------------- star power em LEDs */
+/*
+ * Seis LEDs azuis que enchem com a energia, no lugar da barra antiga.
+ *
+ * A marca fica sobre o terceiro: e o ponto de ativacao (metade da barra).
+ * Sem ela o jogador so descobre que da para ativar tentando.
+ */
+.gh-sp { width: clamp(126px, 12.5vw, 168px); }
+
+.gh-sp-leds {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  padding: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(6, 10, 14, .96), rgba(14, 22, 28, .96));
+  box-shadow: inset 0 0 0 1px rgba(90, 120, 140, .35), inset 0 2px 7px rgba(0, 0, 0, .9);
+}
+
+.gh-sp-led {
+  position: relative;
+  height: clamp(12px, 1.3vw, 18px);
+  border-radius: 2px;
+  background: rgba(143, 233, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .7);
+  overflow: hidden;
+  transition: background .1s linear, box-shadow .1s linear;
+}
+
+.gh-sp-led.half::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 0 0;
+  background: linear-gradient(180deg, #4fc9ec, #1d6f93);
+  box-shadow: 0 0 8px rgba(79, 201, 236, .8);
+}
+
+.gh-sp-led.on {
+  background: linear-gradient(180deg, #a8f0ff, #2b8fb8);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5), 0 0 9px rgba(143, 233, 255, .85);
+}
+
+/* A marca do minimo de ativacao cai entre o terceiro e o quarto LED. */
+.gh-sp-marca {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(236, 228, 207, .55);
+  box-shadow: 0 0 4px rgba(0, 0, 0, .9);
+}
+
+.gh-sp-label {
+  margin-top: 5px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-align: center;
+  color: rgba(236, 228, 207, .55);
+}
+
+/* Pronto: os LEDs acesos respiram, para o jogador reparar sem procurar. */
+.gh-sp.pronto .gh-sp-led.on,
+.gh-sp.ativo .gh-sp-led.on {
+  animation: gh-sp-pulso .9s ease-in-out infinite alternate;
+  animation-delay: var(--atraso, 0ms);
+}
+@keyframes gh-sp-pulso {
+  from { box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), 0 0 6px rgba(143, 233, 255, .5); }
+  to   { box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), 0 0 18px rgba(143, 233, 255, 1); }
+}
+
+.gh-sp.pronto .gh-sp-label { color: #8fe9ff; }
+.gh-sp.ativo {
+  box-shadow:
+    inset 0 0 0 2px rgba(143, 233, 255, .55),
+    inset 0 -3px 8px rgba(0, 0, 0, .7),
+    0 7px 0 rgba(0, 0, 0, .4),
+    0 0 34px rgba(143, 233, 255, .65);
+}
+.gh-sp.ativo .gh-sp-label { color: #fff; text-shadow: 0 0 10px rgba(143, 233, 255, .9); }
 
 /* ------------------------------------------------ medidor de desempenho */
 .gh-rock { width: clamp(126px, 12.5vw, 168px); }
@@ -1131,8 +1254,8 @@ button {
   .hud { padding: 10px; }
   .gh-score-panel { width: clamp(96px, 30vw, 132px); }
   .gh-rock { width: clamp(88px, 27vw, 126px); }
-  .sp-meter { width: clamp(96px, 30vw, 150px); }
-  .hud-right { min-width: 0; }
+  .gh-sp { width: clamp(96px, 30vw, 150px); }
+  .hud-right { min-width: 0; gap: 8px; }
 
   /* ------------------------------------------------------ carregamento */
   .ld-tip { font-size: 14px; max-width: 26ch; }
