@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { GAME_CONFIG } from './config'
 import { judgementFor, lanesMatch, NoteEngine, type NoteEngineCallbacks } from './NoteEngine'
 import type { Chart, ChartNote } from './types'
 
@@ -58,10 +59,17 @@ describe('lanesMatch', () => {
 
 describe('judgementFor', () => {
   it('classifica pelas janelas configuradas', () => {
-    expect(judgementFor(0.01)).toBe('perfect')
-    expect(judgementFor(0.045)).toBe('great')
-    expect(judgementFor(0.09)).toBe('good')
-    expect(judgementFor(0.2)).toBe('miss')
+    // Derivado do config, e nao com numeros soltos: mexer nas janelas e uma
+    // decisao de jogabilidade, e nao pode exigir reescrever o teste - so
+    // conferir que as fronteiras continuam onde o config diz.
+    const { perfect, great, good } = GAME_CONFIG.timing
+    expect(judgementFor(0)).toBe('perfect')
+    expect(judgementFor(perfect)).toBe('perfect')
+    expect(judgementFor(perfect + 0.001)).toBe('great')
+    expect(judgementFor(great)).toBe('great')
+    expect(judgementFor(great + 0.001)).toBe('good')
+    expect(judgementFor(good)).toBe('good')
+    expect(judgementFor(good + 0.001)).toBe('miss')
   })
 })
 

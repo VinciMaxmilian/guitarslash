@@ -26,8 +26,15 @@ const HIT_EFFECT = 0.34
 /** Prata azulado das notas de frase de star power. */
 const STAR_TINT = '#cfe9f2'
 const MISS_EFFECT = 0.4
-/** Tempo que a nota leva para sumir depois de passar da hit line. */
-const PASS_FADE = 0.09
+/**
+ * Tempo que a nota leva para sumir depois de passar da hit line.
+ *
+ * Amarrado a janela de acerto de proposito: enquanto a nota ainda PODE ser
+ * acertada, ela precisa estar na tela. Com os dois numeros soltos, alargar a
+ * janela fazia a nota sumir antes de deixar de valer - e o jogador desistia
+ * de uma nota que ainda contava.
+ */
+const PASS_FADE = GAME_CONFIG.timing.good
 
 /**
  * Renderer da highway em Canvas 2D com perspectiva.

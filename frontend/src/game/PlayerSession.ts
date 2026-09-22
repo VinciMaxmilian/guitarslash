@@ -52,6 +52,20 @@ export class PlayerSession {
   private lastJudgement: Judgement | null = null
   private lastJudgementAt = -10
 
+  /**
+   * Ha um aperto de traste ainda nao aproveitado.
+   *
+   * No modo sem palhetada, a tentativa so acontecia no INSTANTE do aperto. Se
+   * o dedo descia antes da nota entrar na janela - o que acontece o tempo
+   * todo com quem apoia os dedos nos trastes - o aperto era jogado fora, e a
+   * nota passava por cima do traste segurado sem contar como acerto.
+   *
+   * Com a marca, o aperto continua valendo ate encontrar a nota. Ela cai no
+   * primeiro acerto: sem isso, segurar o verde uma vez acertaria sozinho toda
+   * nota verde que viesse depois, e o modo viraria piloto automatico.
+   */
+  private armed = false
+
   constructor(private readonly options: PlayerSessionOptions) {
     this.id = options.id
     this.name = options.name
@@ -114,6 +128,7 @@ export class PlayerSession {
     this.starPowerBursts.length = 0
     this.lastJudgement = null
     this.lastJudgementAt = -10
+    this.armed = false
   }
 
   handleAction(action: GameAction, pressed: boolean, songTime: number): void {
@@ -127,7 +142,9 @@ export class PlayerSession {
       this.heldLanes.add(lane)
       // Sem palhetada: cada traste apertado ja tenta acertar a nota.
       if (!this.requireStrum) {
-        this.notes.tryFret(songTime, this.heldLanes)
+        const acertou = this.notes.tryFret(songTime, this.heldLanes)
+        // Nao achou nota: o aperto fica de pe esperando a que vem.
+        this.armed = acertou === null
       }
       return
     }
@@ -135,8 +152,11 @@ export class PlayerSession {
     if (action === 'strum' && pressed) {
       // No modo sem palhetada a tecla continua funcionando, mas nao pune quem
       // palheta por habito.
-      if (this.requireStrum) this.notes.strum(songTime, this.heldLanes)
-      else this.notes.tryFret(songTime, this.heldLanes)
+      if (this.requireStrum) {
+        this.notes.strum(songTime, this.heldLanes)
+      } else {
+        this.armed = this.notes.tryFret(songTime, this.heldLanes) === null
+      }
       return
     }
 
@@ -146,6 +166,12 @@ export class PlayerSession {
   }
 
   update(songTime: number, deltaSeconds: number): void {
+    // ANTES de `notes.update`, que e quem marca as notas perdidas: um aperto
+    // de pe tem de alcancar a nota enquanto ela ainda esta na janela.
+    if (!this.requireStrum && this.armed && this.heldLanes.size > 0) {
+      if (this.notes.tryFret(songTime, this.heldLanes) !== null) this.armed = false
+    }
+
     this.notes.update(songTime, this.heldLanes)
     this.score.update(deltaSeconds)
 

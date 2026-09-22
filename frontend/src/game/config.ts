@@ -44,10 +44,18 @@ export const ACTION_LABELS: Record<GameAction, string> = {
 }
 
 export const GAME_CONFIG = {
+  /**
+   * Janelas de acerto, em segundos para cada lado da nota.
+   *
+   * `good` e tambem a janela do ERRO: a nota so e dada como perdida quando
+   * passa daqui. Os valores estao na faixa que o Clone Hero usa por padrao
+   * (+/-140 ms); mais apertado que isso pune latencia de monitor e de fone,
+   * que o jogador nao tem como corrigir no dedo.
+   */
   timing: {
-    perfect: 0.03,
-    great: 0.06,
-    good: 0.1,
+    perfect: 0.045,
+    great: 0.09,
+    good: 0.14,
   },
   score: {
     notePoints: 50,
