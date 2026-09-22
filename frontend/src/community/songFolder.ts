@@ -57,6 +57,23 @@ export function contentTypeFor(name: string): string {
 }
 
 /**
+ * O corpo a enviar, com o tipo CORRIGIDO.
+ *
+ * A opcao `contentType` do `storage.upload()` nao vale quando o corpo e um
+ * File: a biblioteca monta um FormData e so usa aquele campo no ramo em que o
+ * corpo NAO e Blob. O servidor acaba lendo o tipo da parte do multipart, que
+ * carrega o `File.type` do navegador - o mesmo `audio/mid` que o bucket
+ * recusa. Passar o tipo pela opcao falhava em silencio.
+ *
+ * `slice` devolve um Blob com o tipo pedido e NAO copia os bytes: o video de
+ * fundo pode ter dezenas de MB, e `new Blob([arquivo])` os traria todos para
+ * a memoria.
+ */
+export function uploadBody(file: File, nomeFinal: string): Blob {
+  return file.slice(0, file.size, contentTypeFor(nomeFinal))
+}
+
+/**
  * O arquivo comeca com o cabecalho "MThd" de MIDI?
  *
  * Serve para DESCOBRIR o formato, e nao para recusar: existe pasta por ai com

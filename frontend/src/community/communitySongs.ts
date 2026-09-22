@@ -4,6 +4,7 @@ import {
   contentTypeFor,
   inspectFolder,
   isMidi,
+  uploadBody,
   parseIni,
   slugify,
   type InspectedFolder,
@@ -224,12 +225,11 @@ export async function uploadSong(
 
     const { error } = await supabase.storage
       .from(BUCKET)
-      .upload(`${prefix}/${nome}`, arquivo, {
+      // O tipo vai no CORPO, e nao na opcao `contentType`: com um File a
+      // biblioteca monta FormData e ignora a opcao, e o servidor le o tipo
+      // que o navegador pos no arquivo. Ver `uploadBody`.
+      .upload(`${prefix}/${nome}`, uploadBody(arquivo, nome), {
         upsert: true,
-        // Tipo pela EXTENSAO, nunca pelo `arquivo.type`. O tipo do navegador
-        // vem do registro do sistema: no Windows um notes.mid e anunciado
-        // como `audio/mid`, que o bucket recusa, e o envio morria no meio -
-        // com o chart e o audio ja gastos.
         contentType: contentTypeFor(nome),
       })
 

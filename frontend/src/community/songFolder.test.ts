@@ -6,6 +6,7 @@ import {
   contentTypeFor,
   inspectFolder,
   isMidi,
+  uploadBody,
   parseIni,
   slugify,
 } from './songFolder'
@@ -309,5 +310,39 @@ describe('isMidi', () => {
 
   it('recusa arquivo vazio', () => {
     return expect(isMidi(comBytes([]))).resolves.toBe(false)
+  })
+})
+
+describe('uploadBody', () => {
+  /**
+   * O tipo tem de viajar NO CORPO.
+   *
+   * A opcao `contentType` do `storage.upload()` e ignorada quando o corpo e
+   * um File: a biblioteca monta um FormData e o servidor le o tipo da parte
+   * do multipart, que carrega o `File.type` do navegador. Passar o tipo pela
+   * opcao falhava em silencio - o envio so quebrava no servidor, com
+   * "mime type audio/mid is not supported".
+   */
+  it('troca o tipo que o navegador pos no arquivo', () => {
+    // `audio/mid` e o que o Windows anuncia para .mid, e o bucket recusa.
+    const arquivo = new File([new Uint8Array(8)], 'notes.mid', { type: 'audio/mid' })
+    expect(arquivo.type).toBe('audio/mid')
+    expect(uploadBody(arquivo, 'notes.mid').type).toBe('audio/midi')
+  })
+
+  it('corrige tambem o audio, que vinha como application/ogg', () => {
+    const arquivo = new File([new Uint8Array(8)], 'song.ogg', { type: 'application/ogg' })
+    expect(uploadBody(arquivo, 'song.ogg').type).toBe('audio/ogg')
+  })
+
+  it('usa o nome FINAL, e nao o do arquivo em disco', () => {
+    // Chart renomeado: o arquivo se chama notes.mid mas sobe como .chart.
+    const arquivo = new File([new Uint8Array(8)], 'notes.mid', { type: 'audio/mid' })
+    expect(uploadBody(arquivo, 'notes.chart').type).toBe('text/plain')
+  })
+
+  it('preserva o conteudo inteiro', () => {
+    const arquivo = new File([new Uint8Array([1, 2, 3, 4, 5])], 'song.ogg')
+    expect(uploadBody(arquivo, 'song.ogg').size).toBe(5)
   })
 })
