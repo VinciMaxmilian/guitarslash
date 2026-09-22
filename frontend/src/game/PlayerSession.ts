@@ -1,4 +1,4 @@
-import { laneForAction } from './config'
+import { GAME_CONFIG, laneForAction } from './config'
 import { NoteEngine, type StarPowerPhraseEvent } from './NoteEngine'
 import { ScoreEngine } from './ScoreEngine'
 import type { Chart, GameAction, HitEvent, Judgement, PlayerSnapshot } from './types'
@@ -53,18 +53,20 @@ export class PlayerSession {
   private lastJudgementAt = -10
 
   /**
-   * Ha um aperto de traste ainda nao aproveitado.
+   * Ate quando um aperto de traste ainda nao aproveitado continua valendo.
    *
-   * No modo sem palhetada, a tentativa so acontecia no INSTANTE do aperto. Se
-   * o dedo descia antes da nota entrar na janela - o que acontece o tempo
-   * todo com quem apoia os dedos nos trastes - o aperto era jogado fora, e a
-   * nota passava por cima do traste segurado sem contar como acerto.
+   * No modo sem palhetada, a tentativa so acontecia no INSTANTE do aperto: um
+   * dedo que descia pouco antes da nota entrar na janela tinha o aperto
+   * jogado fora, e a nota passava por cima do traste segurado sem contar.
    *
-   * Com a marca, o aperto continua valendo ate encontrar a nota. Ela cai no
-   * primeiro acerto: sem isso, segurar o verde uma vez acertaria sozinho toda
-   * nota verde que viesse depois, e o modo viraria piloto automatico.
+   * O buffer resolve isso, mas precisa de TETO. Sem teto, segurar o traste
+   * acertava qualquer nota daquela lane que viesse depois, por mais tarde que
+   * fosse - a area de acerto ficava infinita para tras.
+   *
+   * Tambem cai no primeiro acerto: senao, um unico aperto iria colhendo notas
+   * enquanto a janela durasse.
    */
-  private armed = false
+  private armedUntil = -1
 
   constructor(private readonly options: PlayerSessionOptions) {
     this.id = options.id
@@ -128,7 +130,7 @@ export class PlayerSession {
     this.starPowerBursts.length = 0
     this.lastJudgement = null
     this.lastJudgementAt = -10
-    this.armed = false
+    this.armedUntil = -1
   }
 
   handleAction(action: GameAction, pressed: boolean, songTime: number): void {
@@ -143,8 +145,9 @@ export class PlayerSession {
       // Sem palhetada: cada traste apertado ja tenta acertar a nota.
       if (!this.requireStrum) {
         const acertou = this.notes.tryFret(songTime, this.heldLanes)
-        // Nao achou nota: o aperto fica de pe esperando a que vem.
-        this.armed = acertou === null
+        // Nao achou nota: o aperto fica de pe por um instante, esperando a
+        // que vem. Achou: nao ha nada pendente.
+        this.armedUntil = acertou === null ? songTime + GAME_CONFIG.timing.pressGrace : -1
       }
       return
     }
@@ -155,7 +158,8 @@ export class PlayerSession {
       if (this.requireStrum) {
         this.notes.strum(songTime, this.heldLanes)
       } else {
-        this.armed = this.notes.tryFret(songTime, this.heldLanes) === null
+        const acertou = this.notes.tryFret(songTime, this.heldLanes)
+        this.armedUntil = acertou === null ? songTime + GAME_CONFIG.timing.pressGrace : -1
       }
       return
     }
@@ -168,8 +172,8 @@ export class PlayerSession {
   update(songTime: number, deltaSeconds: number): void {
     // ANTES de `notes.update`, que e quem marca as notas perdidas: um aperto
     // de pe tem de alcancar a nota enquanto ela ainda esta na janela.
-    if (!this.requireStrum && this.armed && this.heldLanes.size > 0) {
-      if (this.notes.tryFret(songTime, this.heldLanes) !== null) this.armed = false
+    if (!this.requireStrum && songTime <= this.armedUntil && this.heldLanes.size > 0) {
+      if (this.notes.tryFret(songTime, this.heldLanes) !== null) this.armedUntil = -1
     }
 
     this.notes.update(songTime, this.heldLanes)

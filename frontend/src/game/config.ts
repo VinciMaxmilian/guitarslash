@@ -53,9 +53,24 @@ export const GAME_CONFIG = {
    * que o jogador nao tem como corrigir no dedo.
    */
   timing: {
-    perfect: 0.045,
-    great: 0.09,
-    good: 0.14,
+    perfect: 0.035,
+    great: 0.065,
+    good: 0.11,
+    /**
+     * Quanto tempo um aperto de traste continua valendo depois de nao achar
+     * nota, no modo sem palhetada.
+     *
+     * E um BUFFER de entrada, nao uma extensao da janela: ele so cobre o
+     * aperto que chegou pouco antes da nota entrar na janela. Sem teto - como
+     * ficou na primeira versao - um dedo apoiado no traste acertava uma nota
+     * que viesse segundos depois, e a area de acerto virava infinita para
+     * tras.
+     *
+     * Alcance total antes da nota = `good` + `pressGrace`. Depois da nota
+     * continua sendo so `good`: atrasar e erro do jogador, adiantar e quase
+     * sempre latencia.
+     */
+    pressGrace: 0.09,
   },
   score: {
     notePoints: 50,
