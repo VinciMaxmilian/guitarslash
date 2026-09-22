@@ -1,10 +1,25 @@
+# Contexto de build do servidor de partidas.
+#
+# A imagem so precisa de requirements.txt, backend/ e main.py (ver Dockerfile).
+# Tudo que sobra aqui e byte que o Railway carrega do git a cada deploy sem
+# usar para nada.
+
 # A biblioteca nao entra na imagem: em producao ela vem do CDN.
 songs/
 magazines/
 UI Sounds/
 UI images/
-frontend/
 dist-songs/
+
+# Frontend: mora no Netlify. O modo host serve o dist da propria maquina, nao
+# daqui.
+frontend/
+
+# Deploy dos outros dois servicos. Nenhum deles influencia esta imagem.
+api/
+vercel.json
+netlify.toml
+supabase/
 
 .git/
 .venv/
@@ -21,5 +36,6 @@ DEPLOY.md
 README.md
 *.dc.html
 .vscode/
+.ignorar/
 .env
 .env.*

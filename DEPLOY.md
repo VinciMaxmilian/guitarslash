@@ -6,19 +6,26 @@ Três alvos, com responsabilidades diferentes:
 |---|---|---|---|
 | **Netlify** | frontend (SPA do Vite) + biblioteca | <https://guitarslash.netlify.app> | sim |
 | **Vercel** | API de músicas (Serverless Function) | <https://guitarslash.vercel.app> | sim |
-| **Servidor de partidas** | WebSocket do multiplayer online | um processo seu (ver Parte 4) | sim |
+| **Railway** | servidor de partidas: WebSocket do multiplayer online | `https://SEU-SERVICO.up.railway.app` | sim |
 | **Modo host** | tudo na mesma origem, na LAN | `http://<ip-da-lan>:8000` | **não** |
 
 Sobre o multiplayer: ele **não passa pela Vercel**, e isso não é configuração
 — Serverless Function não mantém conexão WebSocket aberta, é o modelo de
 execução. Existem dois caminhos, e o mesmo build atende os dois:
 
-- **online**: um processo rodando num servidor que aguenta conexão aberta
-  (Parte 4). O endereço vai em `VITE_WS_URL` no build do Netlify;
+- **online**: um processo no Railway, que aguenta conexão aberta (Parte 4).
+  O endereço vai em `VITE_WS_URL` no build do Netlify;
 - **LAN (modo host)**: um jogador roda o processo na própria máquina e os
   outros abrem o IP dele. Funciona offline.
 
-Faça na ordem: **Vercel primeiro** (o Netlify precisa da URL dela).
+Faça na ordem: **Vercel e Railway primeiro, Netlify por último**. O build do
+Netlify embute as duas URLs (`VITE_API_URL` e `VITE_WS_URL`) no bundle, então
+ele precisa das duas já existindo — variável salva depois do build não vale, só
+no build seguinte.
+
+A dependência do Railway para o Netlify parece circular (`GUITARSLASH_ALLOWED_ORIGINS`
+quer o domínio do Netlify), mas não é: esse domínio você escolhe no começo e ele
+não muda, então dá para preencher antes do primeiro build.
 
 ---
 
@@ -462,29 +469,52 @@ explicando. Não é bug.
 
 ---
 
-## Parte 4 — Servidor de partidas (multiplayer online)
+## Parte 4 — Servidor de partidas no Railway (multiplayer online)
 
 O `/ws` precisa de um **processo de verdade**, que fique no ar mantendo
-conexões abertas. A Vercel não serve. Qualquer plataforma que rode um container
-serve: Railway, Render, Fly.io, Koyeb, uma VPS.
+conexões abertas. A Vercel não serve — Serverless Function não mantém conexão
+aberta, é o modelo de execução, não configuração.
 
-O repositório já tem o `Dockerfile`. Ele roda o **mesmo `create_app`** da
-Vercel — não há um segundo backend para manter.
+Este é o **terceiro serviço**, e só ele muda de casa:
 
-### 4.1 Subir o container
+| Serviço | Onde | O que serve |
+|---|---|---|
+| frontend | Netlify | a SPA |
+| API de músicas | Vercel | `/api/songs`, `/api/community` |
+| **servidor de partidas** | **Railway** | **`/ws`** |
 
-```bash
-docker build -t guitarslash-match .
-docker run -p 8000:8000   -e GUITARSLASH_STORAGE=remote   -e GUITARSLASH_ASSETS_BASE_URL=https://guitarslash.netlify.app   -e GUITARSLASH_ALLOWED_ORIGINS=https://guitarslash.netlify.app   guitarslash-match
-```
+O Railway roda o **mesmo `create_app`** da Vercel, a partir do `Dockerfile` da
+raiz. Não há um segundo backend para manter: o multiplayer é o mesmo código que
+o modo host LAN usa (`backend/app/multiplayer.py`).
 
-Nas plataformas gerenciadas, aponte para o repositório e elas detectam o
-`Dockerfile` sozinhas. Defina as mesmas três variáveis de ambiente.
+### 4.1 Criar o serviço
+
+1. <https://railway.app> → **New Project** → **Deploy from GitHub repo**;
+2. autorize o repositório e selecione-o;
+3. o Railway acha o `Dockerfile` da raiz sozinho. **Não** mexa em build
+   command nem em start command: o `railway.toml` já fixa tudo isso, e o que
+   está nele vence o que estiver clicado no painel;
+4. **Settings → Networking → Generate Domain**. Isso dá a URL pública
+   (`algo.up.railway.app`), que é o valor do `VITE_WS_URL` mais adiante.
+
+A partir daí, todo push no branch conectado redeploya sozinho.
+
+> **Root directory**: deixe na raiz do repositório. O `Dockerfile` copia só
+> `requirements.txt`, `backend/` e `main.py`; o `.dockerignore` barra o resto.
+> Apontar o root para uma subpasta quebraria o `COPY backend/`.
 
 ### 4.2 Variáveis
 
-São as mesmas da Vercel (seção 1.3). `GUITARSLASH_ALLOWED_ORIGINS` é
-**obrigatória** aqui e vale mais do que lá:
+Em **Variables**, as mesmas três da Vercel (seção 1.3):
+
+```
+GUITARSLASH_STORAGE=remote
+GUITARSLASH_ASSETS_BASE_URL=https://guitarslash.netlify.app
+GUITARSLASH_ALLOWED_ORIGINS=https://guitarslash.netlify.app
+```
+
+`GUITARSLASH_ALLOWED_ORIGINS` é **obrigatória** aqui, e vale mais do que na
+Vercel:
 
 > WebSocket **não passa por CORS**. O navegador não protege essa conexão. Quem
 > valida a origem é o servidor, com essa lista. Sem ela configurada, qualquer
@@ -493,37 +523,63 @@ São as mesmas da Vercel (seção 1.3). `GUITARSLASH_ALLOWED_ORIGINS` é
 Origem ausente (cliente nativo, `curl`, teste) passa: navegador **sempre** manda
 `Origin`, então a ausência não é um navegador tentando se disfarçar.
 
+**Não** defina `PORT`. O Railway injeta essa variável e o `Dockerfile` a
+consome (`--port "${PORT:-8000}"`); sobrescrever na mão faz a aplicação subir
+numa porta e o roteador procurar noutra — o sintoma é healthcheck falhando para
+sempre com a aplicação viva nos logs.
+
 ### 4.3 Apontar o frontend
 
 No Netlify, **Site configuration → Environment variables**:
 
 ```
-VITE_WS_URL = https://seu-servidor-de-partidas.exemplo.com
+VITE_WS_URL = https://SEU-SERVICO.up.railway.app
 ```
 
-Aceita `https://` e converte para `wss://` sozinho. É lida em **build time**,
-então exige novo deploy.
+Aceita `https://` e converte para `wss://` sozinho (`toWebSocketScheme`, em
+`frontend/src/game/hostMode.ts`). É lida em **build time**, então exige um novo
+deploy do Netlify — não basta salvar a variável.
 
 Sem essa variável, o botão MULTIPLAYER fica desabilitado no site — com tooltip
 explicando o motivo, em vez de dar erro ao clicar.
 
 ### 4.4 Um processo, e só um
 
-As salas vivem na **memória do processo**. Com dois workers ou duas réplicas,
-dois jogadores com o mesmo código caem em salas diferentes e nunca se veem.
+As salas vivem na **memória do processo** (`RoomRegistry`). Com duas réplicas, o
+Railway manda cada jogador para uma delas: dois amigos digitam o **mesmo código
+de sala**, caem em processos diferentes e nunca se veem — sem erro na tela, só
+uma sala vazia dos dois lados.
 
-- mantenha `--workers 1` (o `Dockerfile` já faz isso);
-- não ligue autoscaling para mais de uma instância;
+- `numReplicas = 1` está fixado no `railway.toml`; não suba no painel;
+- não ligue autoscaling horizontal;
+- `--workers 1` no `Dockerfile` vale pelo mesmo motivo, dentro da instância;
 - se um dia precisar escalar, o estado tem que sair para fora (Redis), e aí o
   `RoomRegistry` muda.
 
-Um processo aguenta 200 salas simultâneas (`MAX_ROOMS`), o que é bastante: são
-até 800 jogadores.
+Um processo aguenta 200 salas simultâneas (`MAX_ROOMS`): até 800 jogadores.
 
-### 4.5 Verificar
+> **Sleep / scale-to-zero**: se o serviço dormir por inatividade, a primeira
+> conexão paga o cold start e **todas as salas abertas se perdem** quando ele
+> dorme. Para um servidor de partidas, deixe desligado.
+
+### 4.5 Testar localmente antes de subir
+
+O mesmo container, na sua máquina:
 
 ```bash
-curl https://seu-servidor-de-partidas.exemplo.com/api/health
+docker build -t guitarslash-match .
+docker run -p 8000:8000 \
+  -e PORT=8000 \
+  -e GUITARSLASH_STORAGE=remote \
+  -e GUITARSLASH_ASSETS_BASE_URL=https://guitarslash.netlify.app \
+  -e GUITARSLASH_ALLOWED_ORIGINS=http://localhost:5173 \
+  guitarslash-match
+```
+
+### 4.6 Verificar em produção
+
+```bash
+curl https://SEU-SERVICO.up.railway.app/api/health
 ```
 
 Depois, no jogo: **MULTIPLAYER → CRIAR**. Aparece um código de 4 caracteres.
@@ -534,9 +590,10 @@ Se travar em "CONECTANDO":
 
 | Causa | Como confirmar |
 |---|---|
-| `VITE_WS_URL` errada ou ausente | console do navegador mostra a URL do WebSocket |
-| origem bloqueada | o servidor fecha com código 4403; veja os logs dele |
-| a plataforma não faz proxy de WebSocket | `curl` na `/api/health` funciona mas o `/ws` não conecta |
+| `VITE_WS_URL` ausente ou build antigo | console do navegador mostra a URL do WebSocket; refaça o deploy do Netlify |
+| origem bloqueada | o servidor fecha com código 4403; veja os logs do Railway |
+| healthcheck nunca passa | `PORT` definida na mão nas Variables — apague |
+| duas réplicas | dois clientes com o mesmo código, cada um sozinho na sala |
 
 ---
 

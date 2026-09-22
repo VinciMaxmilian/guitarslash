@@ -1,0 +1,34 @@
+# Servidor de partidas do Guitar Slash no Railway.
+#
+# Este arquivo existe para o deploy nao depender do que estiver clicado no
+# painel: o Railway le ele a cada build, e o que esta aqui vence a interface.
+# Vale SO para o servidor de partidas (o /ws). A API continua na Vercel e o
+# frontend no Netlify - ver DEPLOY.md.
+
+[build]
+# Nao deixamos o Nixpacks adivinhar: o Dockerfile da raiz ja descreve o
+# processo certo (um worker, porta vinda do ambiente, sem songs/ na imagem).
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# UM. Nao aumente sem antes tirar o estado das salas da memoria do processo.
+#
+# As salas vivem dentro do processo (RoomRegistry, em backend/app/multiplayer.py).
+# Com duas replicas o Railway manda cada jogador para uma delas: dois amigos
+# digitam o MESMO codigo de sala, caem em processos diferentes e nunca se veem
+# - sem erro nenhum na tela, so uma sala vazia dos dois lados. E o tipo de bug
+# que so aparece em producao e some quando voce testa sozinho.
+#
+# Um processo aguenta MAX_ROOMS = 200 salas, ou seja ate 800 jogadores.
+numReplicas = 1
+
+# O /api/health responde sem tocar em sala nenhuma, entao serve de healthcheck.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+
+# Partida e conexao longa: se o processo morrer, o certo e voltar. Quem estava
+# jogando cai (o estado da sala morre junto), mas o servidor volta a aceitar
+# sala nova em vez de ficar fora do ar ate alguem perceber.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

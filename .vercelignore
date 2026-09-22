@@ -31,3 +31,9 @@ DEPLOY.md
 README.md
 *.dc.html
 .vscode/
+
+# Deploy do servidor de partidas (Railway). A Function nao roda o WebSocket.
+Dockerfile
+.dockerignore
+railway.toml
+supabase/
