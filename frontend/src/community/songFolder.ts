@@ -11,6 +11,75 @@ const AUDIO_EXT = ['.opus', '.ogg', '.mp3', '.m4a', '.wav', '.flac']
 const IMAGE_EXT = ['.jpg', '.jpeg', '.png', '.webp']
 const VIDEO_EXT = ['.mp4', '.webm']
 
+/**
+ * Nomes de capa, em ordem de preferencia. Iguais aos do backend
+ * (`COVER_NAMES` em services/library.py), para a mesma pasta dar a mesma capa
+ * na biblioteca local e na comunidade.
+ *
+ * A ordem importa: pasta do Clone Hero costuma trazer varias imagens (capa,
+ * arte de fundo, foto do charter). Pegar "a primeira que aparecer" fazia a
+ * capa depender da ordem em que o navegador entregou os arquivos.
+ */
+const COVER_NAMES = ['album', 'cover', 'artwork', 'background-art']
+
+/**
+ * Tipo MIME por extensao.
+ *
+ * NAO da para confiar no `File.type` do navegador: ele vem do registro do
+ * sistema e muda de maquina para maquina. No Windows um `notes.mid` e
+ * anunciado como `audio/mid`, que nao e um tipo valido e nao esta na lista do
+ * bucket - o envio morria com "mime type audio/mid is not supported". Pior,
+ * quando o sistema nao conhece a extensao o tipo vem VAZIO e o arquivo subia
+ * como texto, o que quebra o seek do audio depois.
+ */
+const MIME_POR_EXT: Record<string, string> = {
+  '.mid': 'audio/midi',
+  '.midi': 'audio/midi',
+  '.chart': 'text/plain',
+  '.ini': 'text/plain',
+  '.opus': 'audio/ogg',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.wav': 'audio/wav',
+  '.flac': 'audio/flac',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+}
+
+/** Tipo com que o arquivo deve ser gravado, decidido pela EXTENSAO. */
+export function contentTypeFor(name: string): string {
+  return MIME_POR_EXT[ext(baseName(name))] ?? 'application/octet-stream'
+}
+
+/**
+ * O arquivo comeca com o cabecalho "MThd" de MIDI?
+ *
+ * Serve para DESCOBRIR o formato, e nao para recusar: existe pasta por ai com
+ * um `notes.chart` (formato texto do Clone Hero) apenas renomeado para
+ * `notes.mid`. O nome engana, o conteudo nao - e o backend le os dois
+ * formatos, entao basta saber qual e.
+ */
+export async function isMidi(file: File): Promise<boolean> {
+  try {
+    const cabecalho = new Uint8Array(await file.slice(0, 4).arrayBuffer())
+    // 0x4d 0x54 0x68 0x64 = "MThd"
+    return (
+      cabecalho[0] === 0x4d &&
+      cabecalho[1] === 0x54 &&
+      cabecalho[2] === 0x68 &&
+      cabecalho[3] === 0x64
+    )
+  } catch {
+    // Nao deu para ler: assume MIDI e deixa o backend decidir.
+    return true
+  }
+}
+
 /** Teto por envio. Acima disto o upload no navegador fica sofrivel. */
 export const MAX_UPLOAD_BYTES = 140 * 1024 * 1024
 
@@ -71,23 +140,36 @@ export function inspectFolder(files: readonly File[]): InspectedFolder {
     totalBytes: 0,
   }
 
+  /** Todas as imagens da pasta; a capa sai daqui no fim. */
+  const imagens: FolderFile[] = []
+
   for (const file of files) {
     const nome = baseName(file.name || (file as File & { webkitRelativePath?: string }).webkitRelativePath || '')
     const baixo = nome.toLowerCase()
     const e = ext(nome)
     const item: FolderFile = { name: nome, size: file.size, file }
 
+    // O MIDI ganha do .chart quando a pasta traz os dois: e o formato que os
+    // editores exportam por ultimo.
     if (baixo === 'notes.mid' || baixo === 'notes.midi') resultado.chart = item
+    else if (baixo === 'notes.chart' && !resultado.chart) resultado.chart = item
     else if (baixo === 'song.ini') resultado.ini = item
     else if (AUDIO_EXT.includes(e)) resultado.audio.push(item)
-    else if (IMAGE_EXT.includes(e) && !resultado.cover) resultado.cover = item
+    else if (IMAGE_EXT.includes(e)) imagens.push(item)
     else if (VIDEO_EXT.includes(e) && !resultado.video) resultado.video = item
     else continue
 
-    resultado.totalBytes += file.size
+    // A capa e escolhida depois, entre todas as imagens: contar o tamanho
+    // aqui somaria as imagens descartadas ao total do envio.
+    if (!IMAGE_EXT.includes(e)) resultado.totalBytes += file.size
   }
 
-  if (!resultado.chart) resultado.errors.push('Falta o notes.mid (o chart da música).')
+  resultado.cover = escolherCapa(imagens)
+  if (resultado.cover) resultado.totalBytes += resultado.cover.size
+
+  if (!resultado.chart) {
+    resultado.errors.push('Falta o notes.mid ou o notes.chart (o chart da música).')
+  }
   if (!resultado.ini) resultado.errors.push('Falta o song.ini (o nome e o artista vêm dele).')
   if (resultado.audio.length === 0) resultado.errors.push('Falta o áudio da música.')
 
@@ -112,6 +194,20 @@ export function inspectFolder(files: readonly File[]): InspectedFolder {
 
   resultado.ok = resultado.errors.length === 0
   return resultado
+}
+
+/**
+ * Qual das imagens da pasta e a capa.
+ *
+ * Preferencia por NOME (album, cover, artwork...). Sem nenhum nome conhecido,
+ * cai na primeira imagem - melhor uma capa errada do que nenhuma.
+ */
+function escolherCapa(imagens: FolderFile[]): FolderFile | null {
+  for (const nome of COVER_NAMES) {
+    const achada = imagens.find((img) => baseName(img.name).toLowerCase().startsWith(`${nome}.`))
+    if (achada) return achada
+  }
+  return imagens[0] ?? null
 }
 
 /** Metadados lidos do song.ini. O formato e `chave = valor`. */

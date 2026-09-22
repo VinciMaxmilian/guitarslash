@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import mido
 import pytest
 
 from backend.app.parsers.midi_parser import (
@@ -158,3 +159,39 @@ def test_instrumento_inexistente_levanta(parsed):
 def test_dificuldade_invalida_levanta(parsed):
     with pytest.raises(MidiParseError):
         build_chart(parsed, "guitar", "insane")
+
+
+def test_sysex_com_byte_fora_da_faixa_nao_derruba_a_musica(tmp_path):
+    """Chart da comunidade com sysex invalido ainda tem de abrir.
+
+    Editores de chart gravam marcacao de open note e de tap como sysex, e nem
+    todos respeitam o limite de 0..127 por byte. Sem `clip=True` o mido recusa
+    o arquivo INTEIRO por causa de uma mensagem que o parser nem le - so
+    usamos note_on/note_off e os meta eventos.
+    """
+    midi = mido.MidiFile(ticks_per_beat=TICKS_PER_BEAT)
+
+    tempo = mido.MidiTrack()
+    tempo.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120), time=0))
+    midi.tracks.append(tempo)
+
+    guitarra = mido.MidiTrack()
+    guitarra.append(mido.MetaMessage("track_name", name="PART GUITAR", time=0))
+    # 0xFF estoura o limite de dado do MIDI; e o que aparece nos charts reais.
+    guitarra.append(mido.Message("sysex", data=[0x50, 0x53, 0x00, 0x7F], time=0))
+    guitarra.append(mido.Message("note_on", note=96, velocity=100, time=0))
+    guitarra.append(mido.Message("note_off", note=96, velocity=0, time=TICKS_PER_BEAT))
+    midi.tracks.append(guitarra)
+
+    caminho = tmp_path / "notes.mid"
+    midi.save(caminho)
+
+    # Reescreve o byte para 0xFF direto no arquivo: o mido nao deixa gravar
+    # um sysex invalido, mas le arquivos que outros programas gravaram assim.
+    bruto = caminho.read_bytes().replace(b"\x50\x53\x00\x7f", b"\x50\x53\x00\xff")
+    caminho.write_bytes(bruto)
+
+    parsed = parse_midi(caminho)
+    chart = build_chart(parsed, "guitar", "expert")
+    assert chart is not None
+    assert len(chart["notes"]) == 1

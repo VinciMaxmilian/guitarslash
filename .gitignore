@@ -22,6 +22,8 @@ frontend/.vite/
 # Cache da biblioteca
 .cache/
 
+.ignonrar
+
 # Deploy
 .vercel/
 .netlify/

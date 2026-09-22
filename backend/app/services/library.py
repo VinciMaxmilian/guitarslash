@@ -12,7 +12,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from ..parsers.midi_parser import MidiParseError, ParsedSong, build_chart, parse_midi
+from ..parsers import MidiParseError, ParsedSong, build_chart, parse_song_chart
 from ..parsers.song_ini_parser import metadata_from_ini, parse_song_ini
 
 AUDIO_EXTENSIONS = (".opus", ".ogg", ".mp3", ".m4a", ".wav", ".flac")
@@ -20,10 +20,9 @@ COVER_NAMES = ("album", "cover", "artwork", "background-art")
 COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 VIDEO_NAMES = ("background", "video")
 VIDEO_EXTENSIONS = (".mp4", ".webm")
-CHART_NAMES = ("notes.mid", "notes.midi")
-# Formato texto do Clone Hero. Detectado para dar mensagem clara, mas ainda
-# nao convertido: suporte a multiplos formatos de chart e item de fase futura.
-ALT_CHART_NAMES = ("notes.chart",)
+#: Ordem de preferencia. O MIDI vem primeiro porque, quando a pasta traz os
+#: dois, ele costuma ser o formato exportado por ultimo pelo editor.
+CHART_NAMES = ("notes.mid", "notes.midi", "notes.chart")
 INI_NAME = "song.ini"
 
 # Stems reconhecidos. `song` e a mixagem completa usada no MVP.
@@ -78,11 +77,7 @@ class SongFolder:
                 self.files["chart"] = entries[candidate]
                 break
         else:
-            alternative = next((entries[n] for n in ALT_CHART_NAMES if n in entries), None)
-            if alternative:
-                self.missing.append(f"notes.mid ({alternative} ainda nao e suportado)")
-            else:
-                self.missing.append("notes.mid")
+            self.missing.append("notes.mid")
 
         if INI_NAME in entries:
             self.files["ini"] = entries[INI_NAME]
@@ -202,7 +197,7 @@ def parse_folder(folder: SongFolder) -> tuple[dict[str, Any], ParsedSong | None]
     chart_path = folder.chart_path()
     if chart_path is not None:
         try:
-            parsed = parse_midi(chart_path)
+            parsed = parse_song_chart(chart_path)
             instruments = parsed.instrument_summary()
             if not metadata["duration"]:
                 metadata["duration"] = round(parsed.length, 3)
@@ -239,7 +234,7 @@ def build_chart_for(folder: SongFolder, instrument: str, difficulty: str) -> dic
     if chart_path is None:
         return None
     try:
-        parsed = parse_midi(chart_path)
+        parsed = parse_song_chart(chart_path)
         chart = build_chart(parsed, instrument, difficulty)
     except MidiParseError:
         return None

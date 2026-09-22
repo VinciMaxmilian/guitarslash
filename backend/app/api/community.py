@@ -27,12 +27,8 @@ from tempfile import NamedTemporaryFile
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..models.song import Chart
-from ..parsers.midi_parser import (
-    DIFFICULTY_BASE,
-    SUPPORTED_INSTRUMENTS,
-    build_chart,
-    parse_midi,
-)
+from ..parsers import CHART_SUFFIXES, build_chart, parse_song_chart
+from ..parsers.midi_parser import DIFFICULTY_BASE, SUPPORTED_INSTRUMENTS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/community", tags=["community"])
@@ -78,8 +74,10 @@ def _validate_path(path: str) -> str:
     limpo = path.strip().lstrip("/")
     if not SAFE_PATH.match(limpo) or ".." in limpo:
         raise HTTPException(status_code=400, detail="caminho invalido")
-    if not limpo.lower().endswith((".mid", ".midi")):
-        raise HTTPException(status_code=400, detail="o caminho deve apontar para um .mid")
+    if not limpo.lower().endswith(CHART_SUFFIXES):
+        raise HTTPException(
+            status_code=400, detail="o caminho deve apontar para um .mid ou .chart"
+        )
     return limpo
 
 
@@ -112,15 +110,18 @@ def _parse(request: Request, path: str):
 
     data = _download(f"{_base_url(request)}/{safe}")
 
-    # `mido` le de arquivo; o temporario e descartado em seguida.
-    with NamedTemporaryFile(suffix=".mid", delete=False) as handle:
+    # Os parsers leem de arquivo; o temporario e descartado em seguida. O
+    # sufixo acompanha o do objeto no bucket para o parser certo ser
+    # escolhido - e, quando a extensao mente, o cabecalho decide.
+    sufixo = ".chart" if safe.lower().endswith(".chart") else ".mid"
+    with NamedTemporaryFile(suffix=sufixo, delete=False) as handle:
         handle.write(data)
         temporario = Path(handle.name)
     try:
-        parsed = parse_midi(temporario)
+        parsed = parse_song_chart(temporario)
     except Exception as exc:
-        logger.warning("MIDI invalido em %s: %s", safe, exc)
-        raise HTTPException(status_code=422, detail="notes.mid invalido") from exc
+        logger.warning("chart invalido em %s: %s", safe, exc)
+        raise HTTPException(status_code=422, detail="chart invalido") from exc
     finally:
         temporario.unlink(missing_ok=True)
 

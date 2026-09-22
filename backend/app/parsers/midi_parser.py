@@ -217,7 +217,12 @@ def _pair_notes(messages: list[tuple[int, mido.Message]]) -> list[RawNote]:
 
 def parse_midi(path: Path | str) -> ParsedSong:
     try:
-        midi = mido.MidiFile(str(path))
+        # clip=True: charts da comunidade trazem sysex com byte fora de 0..127
+        # (marcacao de open note e de tap em editores de chart). Sem o clip o
+        # mido recusa o arquivo INTEIRO por causa de uma mensagem que nem
+        # chegamos a ler - so usamos note_on/note_off e os meta eventos.
+        # Com o clip, o byte e limitado a 127 e a musica abre.
+        midi = mido.MidiFile(str(path), clip=True)
     except Exception as exc:  # mido levanta tipos variados em arquivo corrompido
         raise MidiParseError(f"MIDI invalido: {exc}") from exc
 
@@ -269,7 +274,7 @@ def parse_midi(path: Path | str) -> ParsedSong:
 # --------------------------------------------------------------------------- chart
 
 
-def _hopo_threshold(ticks_per_beat: int) -> int:
+def hopo_threshold(ticks_per_beat: int) -> int:
     # Clone Hero usa 170 ticks numa resolucao de 480; mantemos a proporcao.
     return round(ticks_per_beat * 170 / 480)
 
@@ -277,6 +282,28 @@ def _hopo_threshold(ticks_per_beat: int) -> int:
 def _sustain_threshold(ticks_per_beat: int) -> int:
     # Sustains muito curtos viram notas normais, senao a highway fica poluida.
     return max(1, ticks_per_beat // 8)
+
+
+def natural_hopo(
+    tick: int,
+    lanes: set[int],
+    prev_tick: int | None,
+    prev_lanes: set[int],
+    threshold: int,
+) -> bool:
+    """A nota vira HOPO sozinha, sem ninguem marcar?
+
+    Regra: nota simples, perto o bastante da anterior e em traste diferente.
+
+    Esta funcao existe separada porque o `.chart` precisa dela no PARSE. La o
+    marcador de forcagem nao diz "vire HOPO": ele diz "inverta o que seria
+    natural". Para traduzir isso para o formato interno e preciso saber qual
+    era o natural - e uma segunda implementacao da regra faria o mesmo chart
+    ser lido diferente conforme o arquivo fosse .mid ou .chart.
+    """
+    if len(lanes) > 1 or prev_tick is None:
+        return False
+    return (tick - prev_tick) <= threshold and not lanes.issubset(prev_lanes)
 
 
 def _spans(notes: list[RawNote], tempo: TempoMap) -> list[dict[str, float]]:
@@ -299,7 +326,7 @@ def build_chart(parsed: ParsedSong, instrument: str, difficulty: str) -> dict:
     base = DIFFICULTY_BASE[difficulty]
     tempo = parsed.tempo_map
     tpb = tempo.ticks_per_beat
-    hopo_threshold = _hopo_threshold(tpb)
+    threshold = hopo_threshold(tpb)
     sustain_threshold = _sustain_threshold(tpb)
 
     # Agrupa por tick: notas simultaneas formam um acorde (gate).
@@ -332,12 +359,7 @@ def build_chart(parsed: ParsedSong, instrument: str, difficulty: str) -> dict:
         lane_set = {lane for lane, _ in lanes}
         is_chord = len(lane_set) > 1
 
-        natural_hopo = (
-            not is_chord
-            and prev_tick is not None
-            and (tick - prev_tick) <= hopo_threshold
-            and not lane_set.issubset(prev_lanes)
-        )
+        natural = natural_hopo(tick, lane_set, prev_tick, prev_lanes, threshold)
 
         if is_tap(tick) and not is_chord:
             note_type = "tap"
@@ -345,7 +367,7 @@ def build_chart(parsed: ParsedSong, instrument: str, difficulty: str) -> dict:
             note_type = "normal"
         elif gate["force_hopo"]:
             note_type = "hopo"
-        elif natural_hopo:
+        elif natural:
             note_type = "hopo"
         else:
             note_type = "normal"

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { MAX_UPLOAD_BYTES, MAX_VIDEO_BYTES, inspectFolder, parseIni, slugify } from './songFolder'
+import {
+  MAX_UPLOAD_BYTES,
+  MAX_VIDEO_BYTES,
+  contentTypeFor,
+  inspectFolder,
+  isMidi,
+  parseIni,
+  slugify,
+} from './songFolder'
 
 function arquivo(nome: string, bytes = 1024): File {
   return new File([new Uint8Array(bytes)], nome)
@@ -88,6 +96,54 @@ describe('inspectFolder', () => {
     expect(r.warnings.join(' ')).toContain('vídeo')
     // O video descartado nao pode continuar contando no tamanho do envio.
     expect(r.totalBytes).toBeLessThan(MAX_VIDEO_BYTES)
+  })
+
+  it('escolhe album.jpg como capa mesmo vindo depois de outras imagens', () => {
+    // Pasta real do Clone Hero traz mais de uma imagem. Antes valia "a
+    // primeira que aparecer", entao a capa dependia da ordem em que o
+    // navegador entregou os arquivos - e podia ser a arte de fundo.
+    const r = inspectFolder([
+      arquivo('background.jpg', 900_000),
+      arquivo('jrb.jpg', 80_000),
+      arquivo('album.jpg', 120_000),
+      arquivo('notes.mid', 40_000),
+      arquivo('song.ini', 500),
+      arquivo('song.opus', 3_000_000),
+    ])
+    expect(r.cover?.name).toBe('album.jpg')
+  })
+
+  it('imagem descartada nao conta no tamanho do envio', () => {
+    const r = inspectFolder([
+      arquivo('album.jpg', 100_000),
+      arquivo('jrb.jpg', 5_000_000),
+      arquivo('notes.mid', 40_000),
+      arquivo('song.ini', 500),
+      arquivo('song.opus', 1_000_000),
+    ])
+    expect(r.totalBytes).toBe(100_000 + 40_000 + 500 + 1_000_000)
+  })
+
+  it('aceita pasta que so tem notes.chart', () => {
+    const r = inspectFolder([
+      arquivo('notes.chart', 48_000),
+      arquivo('song.ini', 500),
+      arquivo('song.ogg', 3_000_000),
+      arquivo('album.jpg', 120_000),
+    ])
+    expect(r.ok).toBe(true)
+    expect(r.chart?.name).toBe('notes.chart')
+  })
+
+  it('com os dois formatos, o MIDI ganha', () => {
+    // Pasta que traz os dois: o .mid costuma ser o export mais recente.
+    const r = inspectFolder([
+      arquivo('notes.chart', 48_000),
+      arquivo('notes.mid', 40_000),
+      arquivo('song.ini', 500),
+      arquivo('song.opus', 3_000_000),
+    ])
+    expect(r.chart?.name).toBe('notes.mid')
   })
 
   it('pasta vazia lista tudo que falta', () => {
@@ -201,5 +257,57 @@ describe('slugify', () => {
     for (const [a, t] of [['AC/DC', 'T.N.T.'], ['', ''], ['Legião', 'Será'], ['9mm', '---']]) {
       expect(slugify(a, t)).toMatch(padrao)
     }
+  })
+})
+
+describe('contentTypeFor', () => {
+  /**
+   * O tipo NAO pode sair do `File.type`: ele vem do registro do sistema e
+   * varia por maquina. No Windows um notes.mid e anunciado como `audio/mid`,
+   * que nao esta na lista do bucket, e o envio morria com "mime type
+   * audio/mid is not supported" depois de ja ter gasto banda.
+   */
+  it('grava notes.mid como audio/midi', () => {
+    expect(contentTypeFor('notes.mid')).toBe('audio/midi')
+    expect(contentTypeFor('notes.midi')).toBe('audio/midi')
+  })
+
+  it('cobre tudo que as pastas de verdade trazem', () => {
+    expect(contentTypeFor('song.ini')).toBe('text/plain')
+    expect(contentTypeFor('song.opus')).toBe('audio/ogg')
+    expect(contentTypeFor('song.ogg')).toBe('audio/ogg')
+    expect(contentTypeFor('album.jpg')).toBe('image/jpeg')
+    expect(contentTypeFor('background.mp4')).toBe('video/mp4')
+    expect(contentTypeFor('notes.chart')).toBe('text/plain')
+  })
+
+  it('ignora o caminho e nao se importa com maiusculas na pasta', () => {
+    expect(contentTypeFor('Minha Pasta/notes.mid')).toBe('audio/midi')
+  })
+
+  it('extensao desconhecida vira binario generico, e nao texto', () => {
+    // `text/plain` seria aceito pelo bucket e serviria o arquivo com o tipo
+    // errado; octet-stream tambem passa e nao mente sobre o conteudo.
+    expect(contentTypeFor('coisa.xyz')).toBe('application/octet-stream')
+  })
+})
+
+describe('isMidi', () => {
+  const comBytes = (bytes: number[]) => new File([new Uint8Array(bytes)], 'notes.mid')
+
+  it('aceita arquivo que comeca com MThd', () => {
+    // "MThd" seguido do resto do cabecalho.
+    const mthd = [0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6]
+    return expect(isMidi(comBytes(mthd))).resolves.toBe(true)
+  })
+
+  it('reconhece notes.chart renomeado para notes.mid como NAO sendo MIDI', () => {
+    // Começo real de um notes.chart: BOM de UTF-8 e "[So".
+    const chart = [0xef, 0xbb, 0xbf, 0x5b, 0x53, 0x6f]
+    return expect(isMidi(comBytes(chart))).resolves.toBe(false)
+  })
+
+  it('recusa arquivo vazio', () => {
+    return expect(isMidi(comBytes([]))).resolves.toBe(false)
   })
 })

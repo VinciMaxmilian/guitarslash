@@ -20,7 +20,7 @@ import shutil
 from pathlib import Path
 
 from ..config import load_settings
-from ..parsers.midi_parser import SUPPORTED_INSTRUMENTS, build_chart, parse_midi
+from ..parsers.midi_parser import SUPPORTED_INSTRUMENTS, build_chart
 from ..services.library import find_song_folders, parse_folder
 
 

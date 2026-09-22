@@ -1,6 +1,13 @@
 import { supabase } from '../lib/supabase'
 import type { InstrumentInfo, SongSummary } from '../api/types'
-import { inspectFolder, parseIni, slugify, type InspectedFolder } from './songFolder'
+import {
+  contentTypeFor,
+  inspectFolder,
+  isMidi,
+  parseIni,
+  slugify,
+  type InspectedFolder,
+} from './songFolder'
 
 /**
  * Musicas da comunidade: envio e listagem.
@@ -175,6 +182,13 @@ export async function uploadSong(
   const pasta: InspectedFolder = inspectFolder(arquivos)
   if (!pasta.ok) return { ok: false, error: pasta.errors.join(' ') }
 
+  // Pasta com `notes.chart` renomeado para `notes.mid` e comum. O backend le
+  // os dois formatos, mas escolhe o parser pela EXTENSAO do objeto no bucket:
+  // subir o texto com nome de .mid faria o parser errado ser chamado. O nome
+  // e corrigido aqui, olhando o cabecalho e nao o nome.
+  const chartEhMidi = await isMidi(pasta.chart!.file)
+  const nomeDoChart = chartEhMidi ? 'notes.mid' : 'notes.chart'
+
   const iniTexto = await pasta.ini!.file.text()
   const meta = parseIni(iniTexto)
   const titulo = meta.title.trim() || pasta.chart!.name
@@ -191,8 +205,8 @@ export async function uploadSong(
   // O caminho comeca com o uid: e o que a policy do Storage exige.
   const prefix = `${userId}/${slug}`
 
-  const aEnviar: { logico: string; arquivo: File }[] = [
-    { logico: 'chart', arquivo: pasta.chart!.file },
+  const aEnviar: { logico: string; arquivo: File; nome?: string }[] = [
+    { logico: 'chart', arquivo: pasta.chart!.file, nome: nomeDoChart },
     { logico: 'ini', arquivo: pasta.ini!.file },
     ...pasta.audio.map((a) => ({ logico: stemName(a.name), arquivo: a.file })),
   ]
@@ -204,13 +218,20 @@ export async function uploadSong(
   const files: Record<string, string> = {}
   let enviados = 0
 
-  for (const { logico, arquivo } of aEnviar) {
-    const nome = baseName(arquivo.name)
+  for (const { logico, arquivo, nome: forcado } of aEnviar) {
+    const nome = forcado ?? baseName(arquivo.name)
     onProgress({ step: `Enviando ${nome}`, done: enviados, total: aEnviar.length + 1 })
 
     const { error } = await supabase.storage
       .from(BUCKET)
-      .upload(`${prefix}/${nome}`, arquivo, { upsert: true, contentType: arquivo.type || undefined })
+      .upload(`${prefix}/${nome}`, arquivo, {
+        upsert: true,
+        // Tipo pela EXTENSAO, nunca pelo `arquivo.type`. O tipo do navegador
+        // vem do registro do sistema: no Windows um notes.mid e anunciado
+        // como `audio/mid`, que o bucket recusa, e o envio morria no meio -
+        // com o chart e o audio ja gastos.
+        contentType: contentTypeFor(nome),
+      })
 
     if (error) return { ok: false, error: `Falha ao enviar ${nome}: ${error.message}` }
     files[logico] = nome
