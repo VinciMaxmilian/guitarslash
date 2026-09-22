@@ -53,9 +53,9 @@ export const GAME_CONFIG = {
    * que o jogador nao tem como corrigir no dedo.
    */
   timing: {
-    perfect: 0.035,
-    great: 0.065,
-    good: 0.11,
+    perfect: 0.033,
+    great: 0.062,
+    good: 0.105,
     /**
      * Quanto tempo um aperto de traste continua valendo depois de nao achar
      * nota, no modo sem palhetada.

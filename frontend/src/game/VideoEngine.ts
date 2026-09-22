@@ -4,6 +4,14 @@
  * O video NUNCA e fonte de tempo: ele persegue o AudioEngine. Desvios
  * pequenos sao corrigidos com playbackRate (imperceptivel) e desvios
  * grandes com seek direto.
+ *
+ * O video TOCA EM LOOP: quase todo background de musica e um clipe curto, bem
+ * mais curto que a musica. Sem loop ele congelava no ultimo frame e o resto
+ * da musica era jogado contra uma imagem parada. Por isso o alvo e o tempo da
+ * musica dobrado na duracao do video (`raw % duration`), e o desvio e medido
+ * de forma circular - senao, no instante da volta, uma diferenca de milesimos
+ * apareceria como um desvio do tamanho do clipe inteiro e o seek corretivo
+ * brigaria com o loop.
  */
 
 const SOFT_DRIFT = 0.05
@@ -24,7 +32,7 @@ export class VideoEngine {
       element.muted = true
       element.playsInline = true
       element.preload = 'auto'
-      element.loop = false
+      element.loop = true
     }
   }
 
@@ -53,16 +61,41 @@ export class VideoEngine {
     return this.ready
   }
 
+  /**
+   * Duracao util para o loop, ou null enquanto o metadado nao chegou.
+   *
+   * Streams e alguns webm reportam Infinity ou NaN; nesses casos nao da para
+   * dobrar o tempo e o video toca direto.
+   */
+  private get cycle(): number | null {
+    const duration = this.element?.duration ?? Number.NaN
+    return Number.isFinite(duration) && duration > 0 ? duration : null
+  }
+
+  /**
+   * Distancia do video ate o alvo, pelo caminho mais curto do ciclo.
+   *
+   * Com loop, `currentTime` perto de 0 e alvo perto do fim (ou o contrario)
+   * estao a milesimos de distancia, e nao a um clipe inteiro.
+   */
+  private driftTo(current: number, target: number, cycle: number | null): number {
+    const bruto = current - target
+    if (cycle === null) return bruto
+
+    const dentro = ((bruto % cycle) + cycle) % cycle
+    return dentro > cycle / 2 ? dentro - cycle : dentro
+  }
+
   /** Chamado a cada frame com o tempo autoritativo do audio. */
   sync(songTime: number, paused: boolean): void {
     const element = this.element
     if (!element || !this.ready) return
 
-    const target = songTime + this.offset
+    const bruto = songTime + this.offset
 
-    if (paused || target < 0) {
+    if (paused || bruto < 0) {
       if (!element.paused) element.pause()
-      if (target < 0) {
+      if (bruto < 0) {
         element.currentTime = 0
         element.playbackRate = 1
       }
@@ -70,9 +103,12 @@ export class VideoEngine {
       return
     }
 
+    const cycle = this.cycle
+    const target = cycle === null ? bruto : bruto % cycle
+
     if (!this.wanted) {
       this.wanted = true
-      element.currentTime = Math.max(0, Math.min(target, element.duration || target))
+      element.currentTime = Math.max(0, target)
       void element.play().catch(() => undefined)
     }
 
@@ -80,11 +116,10 @@ export class VideoEngine {
       void element.play().catch(() => undefined)
     }
 
-    const drift = element.currentTime - target
+    const drift = this.driftTo(element.currentTime, target, cycle)
 
     if (Math.abs(drift) > HARD_DRIFT) {
-      const duration = element.duration || Number.POSITIVE_INFINITY
-      element.currentTime = Math.max(0, Math.min(target, duration))
+      element.currentTime = Math.max(0, target)
       element.playbackRate = 1
       return
     }

@@ -10,6 +10,8 @@ interface Props {
   onPickSong: () => void
   /** Musica escolhida na tela de selecao; sO o host consegue aplicar. */
   pickedSongId?: string
+  /** Falha ao baixar/resolver a musica do host. */
+  loadError?: string | null
 }
 
 const INSTRUMENTS = [
@@ -25,7 +27,7 @@ const DIFFICULTIES = [
   { value: 'expert', label: 'EXPERT' },
 ]
 
-export function Lobby({ mp, onBack, onPickSong, pickedSongId }: Props) {
+export function Lobby({ mp, onBack, onPickSong, pickedSongId, loadError }: Props) {
   const [instrument, setInstrument] = useState('guitar')
   const [difficulty, setDifficulty] = useState('expert')
   const uiSounds = useUISounds()
@@ -217,7 +219,14 @@ export function Lobby({ mp, onBack, onPickSong, pickedSongId }: Props) {
             </div>
           )}
 
-        {loading && <div className="lobby-note">Baixando a musica do host...</div>}
+        {loading && !loadError && (
+          <div className="lobby-note">Baixando a musica do host...</div>
+        )}
+        {loadError && (
+          <div className="lobby-warning">
+            Nao deu para carregar a musica do host: {loadError}
+          </div>
+        )}
         {me.spectator && (
           <div className="lobby-warning">
             A partida ja comecou. Voce entra na proxima musica.

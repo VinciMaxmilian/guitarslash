@@ -113,6 +113,28 @@ export async function fetchCommunitySongs(limit = 200): Promise<SongSummary[]> {
   return (data ?? []).map((row) => toSongSummary(row as CommunityRow))
 }
 
+/**
+ * Uma musica da comunidade pelo slug, ou null se nao existir.
+ *
+ * Existe para o multiplayer: a sala trafega so o ID da musica, e o ID de uma
+ * musica da comunidade e o slug - que a biblioteca LOCAL do backend nao
+ * conhece. Sem este caminho, quem recebesse o BEGIN_LOAD de uma musica da
+ * comunidade tentaria resolve-la em /api/songs/<slug>, levaria 404 e ficaria
+ * parado no "baixando a musica do host".
+ */
+export async function fetchCommunitySong(slug: string): Promise<SongSummary | null> {
+  if (!supabase || !slug) return null
+
+  const { data, error } = await supabase
+    .from('community_library')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (error || !data) return null
+  return toSongSummary(data as CommunityRow)
+}
+
 export interface UploadProgress {
   /** Passo atual, legivel para a interface. */
   step: string

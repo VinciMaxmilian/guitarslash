@@ -21,6 +21,7 @@ import { Leaderboard } from './pages/Leaderboard'
 import { Lobby } from './pages/Lobby'
 import { MultiplayerStart } from './pages/MultiplayerStart'
 import type { PlayerSnapshot, Chart } from './game/types'
+import { fetchCommunitySong } from './community/communitySongs'
 import { useBackgroundMusic } from './hooks/useBackgroundMusic'
 import { useSettings } from './hooks/useSettings'
 import { settingsStore } from './settings/SettingsStore'
@@ -65,6 +66,8 @@ export function App() {
   const mp = useMultiplayer(settings.profileName || 'Player', multiplayer, joinCode)
   //: Evita entrar duas vezes na mesma partida quando o BEGIN_LOAD se repete.
   const loadedFor = useRef<string | null>(null)
+  //: Falha ao resolver a musica do host, mostrada no lobby.
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useSettingsSync(auth.session)
   useBackgroundMusic(screen)
@@ -91,11 +94,32 @@ export function App() {
     settingsStore.update({ profileName: nome })
   }, [auth.displayName])
 
-  const enterGame = useCallback(async (songId: string, inst: string, diff: string) => {
-    const s = await api.song(songId)
-    setSelection({ song: s, instrument: inst, difficulty: diff })
-    setScreen('game')
+  /**
+   * Resolve o ID que a sala trafega para a musica inteira.
+   *
+   * A biblioteca local e a da comunidade sao DOIS acervos: `/api/songs/<id>`
+   * so conhece a pasta `songs/` da maquina, e uma musica da comunidade tem o
+   * slug do Supabase como ID. Tentar so o backend deixava qualquer partida
+   * com musica da comunidade travada no "baixando a musica do host".
+   */
+  const resolveSong = useCallback(async (songId: string): Promise<SongSummary> => {
+    try {
+      return await api.song(songId)
+    } catch (err) {
+      const daComunidade = await fetchCommunitySong(songId)
+      if (daComunidade) return daComunidade
+      throw err
+    }
   }, [])
+
+  const enterGame = useCallback(
+    async (songId: string, inst: string, diff: string) => {
+      const s = await resolveSong(songId)
+      setSelection({ song: s, instrument: inst, difficulty: diff })
+      setScreen('game')
+    },
+    [resolveSong],
+  )
 
   // BEGIN_LOAD do host: todo mundo esta pronto, entra na tela de jogo.
   useEffect(() => {
@@ -109,7 +133,15 @@ export function App() {
     const key = `${songId}:${me.instrument}:${me.difficulty}`
     if (loadedFor.current === key) return
     loadedFor.current = key
-    void enterGame(songId, me.instrument, me.difficulty)
+    setLoadError(null)
+    // A falha PRECISA soltar a trava e aparecer na tela. Sem isto, qualquer
+    // erro ao resolver a musica virava uma promise rejeitada em silencio: o
+    // jogador ficava para sempre no "baixando a musica do host", sem mensagem
+    // e sem nova tentativa, porque `loadedFor` ja estava marcado.
+    void enterGame(songId, me.instrument, me.difficulty).catch((err) => {
+      loadedFor.current = null
+      setLoadError(err instanceof Error ? err.message : String(err))
+    })
   }, [multiplayer, mp.beginLoad, mp.room, mp.self, enterGame])
 
   // Voltou para o lobby (host clicou em NOVA PARTIDA ou trocou a musica):
@@ -122,7 +154,9 @@ export function App() {
   // ROOM_STATE - e eles chegam a todo momento - jogava o jogador de volta
   // para dentro da musica que ele acabara de sair.
   useEffect(() => {
-    if (mp.room?.phase === 'lobby') loadedFor.current = null
+    if (mp.room?.phase !== 'lobby') return
+    loadedFor.current = null
+    setLoadError(null)
   }, [mp.room?.phase])
 
   // O host saiu do ar no meio do jogo: nao deixa a tela quebrada.
@@ -141,6 +175,7 @@ export function App() {
 
   const abrirLobby = useCallback((code?: string) => {
     loadedFor.current = null
+    setLoadError(null)
     setJoinCode(code)
     setMultiplayer(true)
     setScreen('lobby')
@@ -207,6 +242,7 @@ export function App() {
           onBack={leaveMultiplayer}
           onPickSong={() => setScreen('songs')}
           pickedSongId={song?.id}
+          loadError={loadError}
         />
       )}
 
