@@ -14,6 +14,17 @@
  * brigaria com o loop.
  */
 
+/**
+ * Teto para o carregamento do video, em ms.
+ *
+ * O video de fundo e ENFEITE: se ele demora, a partida tem que comecar sem
+ * ele. Sem este teto, um `loadeddata` que nunca chega (arquivo grande, rede
+ * ruim, codec que o navegador aceita mas nao decodifica) segurava o
+ * `GameEngine.load()` para sempre - e, no multiplayer, o jogador nunca
+ * mandava LOAD_PROGRESS, entao a sala inteira ficava esperando por ele.
+ */
+const LOAD_TIMEOUT_MS = 12000
+
 const SOFT_DRIFT = 0.05
 const HARD_DRIFT = 0.3
 const SOFT_RATE = 0.06
@@ -43,18 +54,26 @@ export class VideoEngine {
     this.ready = false
     element.src = url
 
+    let expirou = false
+
     await new Promise<void>((resolve) => {
+      let timer = 0
       const done = () => {
+        window.clearTimeout(timer)
         element.removeEventListener('loadeddata', done)
         element.removeEventListener('error', done)
         resolve()
       }
+      timer = window.setTimeout(() => {
+        expirou = true
+        done()
+      }, LOAD_TIMEOUT_MS)
       element.addEventListener('loadeddata', done, { once: true })
       element.addEventListener('error', done, { once: true })
       element.load()
     })
 
-    this.ready = !element.error
+    this.ready = !expirou && !element.error
   }
 
   get hasVideo(): boolean {

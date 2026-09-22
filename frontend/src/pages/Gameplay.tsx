@@ -17,6 +17,14 @@ import { useSettings } from '../hooks/useSettings'
 import { formatNumber, formatPercent, formatTime } from '../utils/format'
 import { useUISounds } from '../hooks/useUISounds'
 
+/**
+ * Quanto se aceita esperar pelo START_AT do host, em ms.
+ *
+ * O servidor marca o inicio para 3 s depois de todo mundo carregar; este teto
+ * e folgado de proposito, so para nunca virar uma espera infinita.
+ */
+const MAX_START_WAIT_MS = 10000
+
 interface Props {
   song: SongSummary
   instrument: string
@@ -167,7 +175,14 @@ export function Gameplay({
   useEffect(() => {
     if (!msUntilStart || !ready || needsGesture) return
     if (startedRef.current || startAt == null) return
-    const wait = msUntilStart() ?? 0
+    // Teto na espera. `msUntilStart` depende do offset de relogio estimado
+    // pelo ClockSync; se essa estimativa vier errada (poucas amostras, relogio
+    // do host muito adiantado), a conta pode dar minutos - e a tela ficava
+    // congelada, sem musica e sem aviso, ate esse tempo passar. Acima do teto
+    // o certo e comecar: alguns ms de dessincronia sao melhores que uma tela
+    // parada.
+    const bruto = msUntilStart() ?? 0
+    const wait = Math.min(Math.max(0, bruto), MAX_START_WAIT_MS)
     const timer = window.setTimeout(() => {
       startedRef.current = true
       uiSounds.play('start1')
@@ -284,6 +299,9 @@ export function Gameplay({
     onExit()
   }
 
+  // Carregado e sem contagem a vista: a partida depende dos outros.
+  const esperandoHost = Boolean(mp) && ready && !error && !needsGesture && !snapshot
+
   return (
     <div className="gameplay">
       {videoUrl ? (
@@ -358,6 +376,35 @@ export function Gameplay({
 
       {!ready && !error && (
         <LoadingScreen songTitle={song.title} done={progress.done} total={progress.total} />
+      )}
+
+      {/* Carregado, mas o host ainda nao marcou o inicio. Sem isto a tela fica
+          so com o video parado e nenhuma pista do que esta acontecendo: a
+          engine so desenha depois do start, entao nao ha HUD nem contagem. */}
+      {esperandoHost && (
+        <div className="overlay">
+          <div className="panel overlay-box">
+            <h2>Aguardando os jogadores</h2>
+            <div className="lobby-players">
+              {(mp?.room?.players ?? [])
+                .filter((p) => !p.spectator)
+                .map((p) => (
+                  <div key={p.id} className="lobby-card">
+                    <div className="lobby-card-name">{p.name}</div>
+                    <div className="lobby-load">
+                      <div
+                        className="lobby-load-fill"
+                        style={{ width: `${Math.round(p.loadProgress * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <button className="btn ghost" onClick={sair}>
+              <span>Sair</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {needsGesture && (

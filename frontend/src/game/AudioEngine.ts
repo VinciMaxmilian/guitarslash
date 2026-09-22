@@ -38,6 +38,14 @@ interface Stem {
 }
 
 /** `preview` e um trecho curto para a tela de selecao, nunca parte da mixagem. */
+/**
+ * Teto para esperar o desbloqueio do audio, em ms.
+ *
+ * Curto de proposito: se o navegador nao liberou ate aqui, ele esta esperando
+ * um clique, e quem espera por isso e a interface, nao o carregamento.
+ */
+const UNLOCK_TIMEOUT_MS = 1500
+
 const EXCLUDED_STEMS = new Set(['preview'])
 
 /** Stems que entram mais baixos na mixagem da base. */
@@ -227,10 +235,26 @@ export class AudioEngine {
   }
 
   /** Garante que o contexto esteja ativo. Precisa de um gesto do usuario antes. */
+  /**
+   * Tenta liberar o audio, SEM nunca segurar quem chamou.
+   *
+   * `resume()` em contexto suspenso devolve uma promise que o navegador so
+   * resolve quando houver um gesto do usuario - e, se esse gesto nunca vier,
+   * ela fica pendente para sempre. Como o `GameEngine.load()` esperava por
+   * ela, a partida inteira parava aqui: a tela ficava carregando, o
+   * LOAD_PROGRESS nunca era enviado e, no multiplayer, a sala esperava por
+   * esse jogador ate o timeout do servidor.
+   *
+   * Quem chama decide o que fazer depois olhando `contextState`: a interface
+   * ja tem a tela de "clique para comecar" para esse caso.
+   */
   async unlock(): Promise<void> {
-    if (this.context.state === 'suspended') {
-      await this.context.resume()
-    }
+    if (this.context.state !== 'suspended') return
+
+    await Promise.race([
+      this.context.resume().catch(() => undefined),
+      new Promise<void>((resolve) => window.setTimeout(resolve, UNLOCK_TIMEOUT_MS)),
+    ])
   }
 
   /**
