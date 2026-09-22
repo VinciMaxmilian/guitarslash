@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import '../styles/riff-riot.css'
 import { useUISounds } from '../hooks/useUISounds'
+import { GAME_VERSION } from '../version'
 
 interface MenuOption {
   label: string
@@ -174,6 +175,9 @@ export function MainMenu({
           <div className="rr-key white" />
           <span className="rr-control-label">UP/DOWN</span>
         </div>
+        {/* No canto, fora do fluxo centralizado das dicas de controle: a
+            versao e para ser conferida quando procurada, nao lida sempre. */}
+        <span className="menu-version">v{GAME_VERSION}</span>
       </div>
     </div>
   )

@@ -69,6 +69,18 @@ button {
   z-index: 20;
 }
 
+/* Versao do jogo, no canto direito do rodape do menu. */
+.menu-version {
+  position: absolute;
+  right: 22px;
+  bottom: 50%;
+  transform: translateY(50%);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: rgba(239, 230, 214, .38);
+}
+
 .rr-control-hint {
   display: flex;
   align-items: center;
